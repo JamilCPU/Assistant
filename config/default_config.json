@@ -1,0 +1,34 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000
+  },
+  "models": {
+    "chat": {
+      "default": "llama3",
+      "ollama_url": "http://localhost:11434"
+    },
+    "image": {
+      "default": "stable-diffusion-xl",
+      "auto1111_url": "http://localhost:7860",
+      "save_path": "./backend/storage/data/images"
+    },
+    "tts": {
+      "default_voice": "en_US-lessac-medium",
+      "piper_path": "./piper"
+    }
+  },
+  "tools": {
+    "filesystem_allowlist": ["C:/Users", "D:/Documents"],
+    "max_file_size_mb": 10
+  },
+  "permissions": {
+    "local_mode": "full",
+    "remote_mode": "restricted"
+  },
+  "storage": {
+    "data_dir": "./backend/storage/data",
+    "images_dir": "./backend/storage/data/images",
+    "conversations_db": "./backend/storage/data/conversations/assistant.db"
+  }
+}

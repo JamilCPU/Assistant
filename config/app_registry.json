@@ -1,0 +1,19 @@
+{
+  "applications": {
+    "notepad": {
+      "name": "Notepad",
+      "path": "notepad.exe",
+      "args": []
+    },
+    "calculator": {
+      "name": "Calculator",
+      "path": "calc.exe",
+      "args": []
+    },
+    "explorer": {
+      "name": "File Explorer",
+      "path": "explorer.exe",
+      "args": []
+    }
+  }
+}
