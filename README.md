@@ -9,7 +9,7 @@ A local-first AI dashboard that runs on a personal GPU workstation and exposes m
 - **Modular Architecture**: Easy to add new models and tools
 - **Tool System**: Filesystem, web search, and system automation tools
 - **VPN Access**: Accessible via VPN mesh for remote devices
-- **Desktop UI**: PySide6 desktop application
+- **Desktop UI**: PySide6 desktop app
 
 ## Architecture
 
