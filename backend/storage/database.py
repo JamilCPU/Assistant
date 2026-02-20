@@ -37,9 +37,14 @@ class Database:
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    metadata TEXT,
-                    INDEX idx_session_id (session_id)
+                    metadata TEXT
                 )
+            """)
+            
+            # Create index for conversations
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_conversations_session_id 
+                ON conversations(session_id)
             """)
             
             # Tool executions table
@@ -53,9 +58,14 @@ class Database:
                     result TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     success BOOLEAN DEFAULT 1,
-                    FOREIGN KEY (message_id) REFERENCES conversations(id),
-                    INDEX idx_session_id (session_id)
+                    FOREIGN KEY (message_id) REFERENCES conversations(id)
                 )
+            """)
+            
+            # Create index for tool_executions
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tool_executions_session_id 
+                ON tool_executions(session_id)
             """)
             
             # Sessions table
