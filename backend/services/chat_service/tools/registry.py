@@ -1,6 +1,6 @@
 """Tool registry system."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from backend.services.chat_service.tools.base import Tool
 from backend.services.chat_service.tools.filesystem import ReadFileTool, SearchFilesTool
