@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from backend.storage.config import get_config
 
