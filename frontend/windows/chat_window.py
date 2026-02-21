@@ -124,15 +124,16 @@ class ChatWindow(QWidget):
         speak = self.tts_checkbox.isChecked()
         
         # Create worker thread for async operation
-        worker = ChatWorker(
+        # Store as instance variable to prevent garbage collection before completion
+        self._worker = ChatWorker(
             self.api_client,
             message,
             self.session_id,
             speak
         )
-        worker.response_received.connect(self._handle_response)
-        worker.error_occurred.connect(self._handle_error)
-        worker.start()
+        self._worker.response_received.connect(self._handle_response)
+        self._worker.error_occurred.connect(self._handle_error)
+        self._worker.start()
     
     def _handle_response(self, response: dict):
         """Handle chat response."""

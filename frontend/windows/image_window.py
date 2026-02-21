@@ -187,7 +187,8 @@ class ImageWindow(QWidget):
         cfg_scale = self.cfg_spin.value()
         
         # Create worker thread
-        worker = ImageWorker(
+        # Store as instance variable to prevent garbage collection before completion
+        self._worker = ImageWorker(
             self.api_client,
             prompt,
             negative_prompt=negative_prompt,
@@ -196,9 +197,9 @@ class ImageWindow(QWidget):
             steps=steps,
             cfg_scale=cfg_scale
         )
-        worker.image_generated.connect(self._handle_image)
-        worker.error_occurred.connect(self._handle_error)
-        worker.start()
+        self._worker.image_generated.connect(self._handle_image)
+        self._worker.error_occurred.connect(self._handle_error)
+        self._worker.start()
     
     def _handle_image(self, response: dict):
         """Handle generated image."""
