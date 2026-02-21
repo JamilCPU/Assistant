@@ -1,12 +1,11 @@
 """
-Shared test infrastructure for E2E tests.
+Shared test infrastructure.
 
 Provides:
 - --live pytest flag for running against real services
 - Test database (temporary SQLite, not production)
 - FastAPI test server on port 8111
 - Mock adapters for Ollama, Auto1111, Piper (default; skipped with --live)
-- QApplication and MainWindow fixtures pointed at the test server
 """
 
 import asyncio
@@ -265,7 +264,6 @@ def backend_server(test_config_path, test_db_path, test_images_dir, test_audio_d
         p.start()
 
     # Now import the app (after singletons and patches are in place)
-    # We need to re-import router to pick up patched managers
     import importlib
     import backend.gateway.router as router_mod
     importlib.reload(router_mod)
@@ -301,71 +299,6 @@ def backend_server(test_config_path, test_db_path, test_images_dir, test_audio_d
     for p in patches:
         p.stop()
     _reset_singletons()
-
-
-# ---------------------------------------------------------------------------
-# PySide / Qt fixtures
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def test_settings_path(tmp_test_dir):
-    """Write frontend settings JSON pointing at the test server."""
-    settings = {
-        "api_url": "http://127.0.0.1:8111",
-        "api_key": "test-key",
-        "window_width": 1200,
-        "window_height": 800,
-    }
-    path = str(Path(tmp_test_dir) / "settings.json")
-    with open(path, "w") as f:
-        json.dump(settings, f)
-    return path
-
-
-@pytest.fixture(scope="session")
-def qapp(backend_server):
-    """
-    Provide a QApplication for the entire test session.
-
-    pytest-qt normally creates one per function; we override to session scope
-    so the backend_server starts first and all tests share one app instance.
-    """
-    from PySide6.QtWidgets import QApplication
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
-
-
-@pytest.fixture()
-def main_window(qapp, qtbot, test_settings_path, backend_server):
-    """Launch a MainWindow connected to the test backend."""
-    from frontend.components.settings import Settings
-    from frontend.windows.main_window import MainWindow
-
-    # Patch Settings to use our test settings file
-    with patch.object(Settings, "__init__", lambda self, settings_path=None: (
-        setattr(self, "settings_path", Path(test_settings_path)),
-        setattr(self, "_settings", json.load(open(test_settings_path))),
-    )[-1]):
-        window = MainWindow()
-        qtbot.addWidget(window)
-        window.show()
-        qtbot.waitExposed(window)
-        yield window
-        window.close()
-
-
-@pytest.fixture()
-def chat_window(main_window):
-    """Return the ChatWindow widget inside the main window."""
-    return main_window.chat_window
-
-
-@pytest.fixture()
-def image_window(main_window):
-    """Return the ImageWindow widget inside the main window."""
-    return main_window.image_window
 
 
 # ---------------------------------------------------------------------------
