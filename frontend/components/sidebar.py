@@ -1,12 +1,13 @@
 """
-Sidebar widget — fixed-width left panel mimicking the ChatGPT sidebar.
+Sidebar widget — fixed-width left panel mimicking the modern ChatGPT sidebar.
 
 Signals
 -------
-new_chat_requested      emitted when the "New Chat" button is clicked
+new_chat_requested      emitted when the "New Chat" icon button is clicked
 conversation_selected   emitted with session_id (str) when history item clicked
 mode_changed            emitted with mode name ("chat" | "image") when mode button clicked
 settings_requested      emitted when the Settings button is clicked
+sidebar_toggled         emitted when the collapse/expand toggle is clicked
 """
 
 from PySide6.QtCore import Qt, Signal
@@ -18,7 +19,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QSizePolicy,
-    QSpacerItem,
     QVBoxLayout,
     QWidget,
 )
@@ -27,9 +27,10 @@ from PySide6.QtWidgets import (
 class Sidebar(QWidget):
     """
     Left sidebar containing:
-      - "New Chat" button
-      - Conversation history list
+      - Collapse/expand toggle + "New Chat" icon buttons in the header
+      - "Search chats" button
       - Mode switcher buttons (Chat / Image Generation)
+      - Conversation history list with section label
       - Settings button at the bottom
     """
 
@@ -37,6 +38,7 @@ class Sidebar(QWidget):
     conversation_selected: Signal = Signal(str)      # session_id
     mode_changed: Signal = Signal(str)               # "chat" | "image"
     settings_requested: Signal = Signal()
+    sidebar_toggled: Signal = Signal()
 
     _FIXED_WIDTH = 260
 
@@ -56,48 +58,48 @@ class Sidebar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── Top section ───────────────────────────────────────────────
-        top_frame = QFrame()
-        top_frame.setObjectName("sidebar")
-        top_layout = QVBoxLayout(top_frame)
-        top_layout.setContentsMargins(8, 12, 8, 8)
-        top_layout.setSpacing(4)
+        # ── Header row: toggle button + new chat button ────────────────
+        header = QWidget()
+        header.setObjectName("sidebarHeader")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(8, 10, 8, 6)
+        header_layout.setSpacing(4)
 
-        self.new_chat_btn = QPushButton("＋  New Chat")
+        self.toggle_btn = QPushButton("☰")
+        self.toggle_btn.setObjectName("sidebarToggleBtn")
+        self.toggle_btn.setToolTip("Toggle sidebar")
+        self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        header_layout.addWidget(self.toggle_btn)
+
+        header_layout.addStretch()
+
+        self.new_chat_btn = QPushButton("✎")
         self.new_chat_btn.setObjectName("newChatBtn")
+        self.new_chat_btn.setToolTip("New Chat")
         self.new_chat_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        top_layout.addWidget(self.new_chat_btn)
+        header_layout.addWidget(self.new_chat_btn)
 
-        layout.addWidget(top_frame)
+        layout.addWidget(header)
 
-        # ── History list ──────────────────────────────────────────────
-        history_header = QLabel("Recent")
-        history_header.setContentsMargins(16, 10, 8, 4)
-        history_header.setStyleSheet(
-            "color: #6b6b7b; font-size: 11px; font-weight: 600;"
-            "text-transform: uppercase; background: transparent;"
-        )
-        layout.addWidget(history_header)
+        # ── Search button ──────────────────────────────────────────────
+        nav_frame = QWidget()
+        nav_frame.setObjectName("sidebar")
+        nav_layout = QVBoxLayout(nav_frame)
+        nav_layout.setContentsMargins(8, 2, 8, 4)
+        nav_layout.setSpacing(2)
 
-        self.history_list = QListWidget()
-        self.history_list.setObjectName("historyList")
-        self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.history_list.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        layout.addWidget(self.history_list, stretch=1)
+        self.search_btn = QPushButton("🔍  Search chats")
+        self.search_btn.setObjectName("searchBtn")
+        self.search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        nav_layout.addWidget(self.search_btn)
+
+        layout.addWidget(nav_frame)
 
         # ── Mode switcher ─────────────────────────────────────────────
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setStyleSheet("color: #4d4d4f; background: #4d4d4f; max-height: 1px;")
-        layout.addWidget(divider)
-
-        mode_frame = QFrame()
+        mode_frame = QWidget()
         mode_frame.setObjectName("sidebar")
         mode_layout = QVBoxLayout(mode_frame)
-        mode_layout.setContentsMargins(8, 8, 8, 4)
+        mode_layout.setContentsMargins(8, 2, 8, 4)
         mode_layout.setSpacing(2)
 
         self.chat_mode_btn = QPushButton("💬  Chat")
@@ -115,16 +117,43 @@ class Sidebar(QWidget):
 
         layout.addWidget(mode_frame)
 
-        # ── Bottom section ────────────────────────────────────────────
+        # ── Subtle divider ─────────────────────────────────────────────
+        divider = QFrame()
+        divider.setFrameShape(QFrame.Shape.HLine)
+        divider.setStyleSheet(
+            "background: #2e2e2e; max-height: 1px; border: none; margin: 0 12px;"
+        )
+        layout.addWidget(divider)
+
+        # ── History section label ──────────────────────────────────────
+        self._history_label = QLabel("Recent")
+        self._history_label.setObjectName("historySectionLabel")
+        self._history_label.setContentsMargins(16, 10, 8, 4)
+        layout.addWidget(self._history_label)
+
+        # ── History list ───────────────────────────────────────────────
+        self.history_list = QListWidget()
+        self.history_list.setObjectName("historyList")
+        self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.history_list.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        layout.addWidget(self.history_list, stretch=1)
+
+        # ── Bottom divider ─────────────────────────────────────────────
         bottom_divider = QFrame()
         bottom_divider.setFrameShape(QFrame.Shape.HLine)
-        bottom_divider.setStyleSheet("color: #4d4d4f; background: #4d4d4f; max-height: 1px;")
+        bottom_divider.setStyleSheet(
+            "background: #2e2e2e; max-height: 1px; border: none; margin: 0 12px;"
+        )
         layout.addWidget(bottom_divider)
 
-        bottom_frame = QFrame()
+        # ── Settings button ────────────────────────────────────────────
+        bottom_frame = QWidget()
         bottom_frame.setObjectName("sidebar")
         bottom_layout = QVBoxLayout(bottom_frame)
-        bottom_layout.setContentsMargins(8, 8, 8, 12)
+        bottom_layout.setContentsMargins(8, 6, 8, 10)
         bottom_layout.setSpacing(2)
 
         self.settings_btn = QPushButton("⚙  Settings")
@@ -135,6 +164,7 @@ class Sidebar(QWidget):
         layout.addWidget(bottom_frame)
 
     def _connect_signals(self) -> None:
+        self.toggle_btn.clicked.connect(self.sidebar_toggled.emit)
         self.new_chat_btn.clicked.connect(self.new_chat_requested.emit)
         self.chat_mode_btn.clicked.connect(lambda: self._switch_mode("chat"))
         self.image_mode_btn.clicked.connect(lambda: self._switch_mode("image"))

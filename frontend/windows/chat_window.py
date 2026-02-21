@@ -1,12 +1,14 @@
 """
-Chat window — redesigned to mimic the ChatGPT interface.
+Chat window — redesigned to mimic the modern ChatGPT interface.
 
 Layout
 ------
 QVBoxLayout (chatArea)
-  ├── Model selector bar   (QHBoxLayout — model QComboBox + TTS QCheckBox)
-  ├── QScrollArea          (chatScroll, stretch=1) → MessageBubble stack
-  └── Input bar            (QHBoxLayout — ExpandingTextEdit + send QPushButton)
+  ├── Model bar        (QHBoxLayout — model QComboBox [left] + TTS checkbox + profile btn [right])
+  ├── QStackedWidget
+  │     ├── [0] Welcome screen (centered label, shown when no messages)
+  │     └── [1] QScrollArea  (chatScroll, stretch=1) → MessageBubble stack
+  └── Input outer     (centered pill input bar, max-width 768px)
 
 Backward-compatibility notes
 -----------------------------
@@ -33,6 +35,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -57,8 +60,8 @@ class ExpandingTextEdit(QTextEdit):
     # Emitted when Enter/Return is pressed (without Shift)
     returnPressed: Signal = Signal()
 
-    _MIN_HEIGHT = 42
-    _MAX_HEIGHT = 120
+    _MIN_HEIGHT = 44
+    _MAX_HEIGHT = 160
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -67,7 +70,7 @@ class ExpandingTextEdit(QTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setFixedHeight(self._MIN_HEIGHT)
-        self.setPlaceholderText("Message…")
+        self.setPlaceholderText("Ask anything…")
         self.document().contentsChanged.connect(self._adjust_height)
 
     # ── QLineEdit-compatible helpers ────────────────────────────────────────
@@ -87,7 +90,7 @@ class ExpandingTextEdit(QTextEdit):
     # ── Auto-height ─────────────────────────────────────────────────────────
 
     def _adjust_height(self) -> None:
-        doc_height = int(self.document().size().height()) + 16
+        doc_height = int(self.document().size().height()) + 20
         new_height = max(self._MIN_HEIGHT, min(doc_height, self._MAX_HEIGHT))
         self.setFixedHeight(new_height)
 
@@ -168,6 +171,7 @@ class ChatWindow(QWidget):
         )
         self.session_id: Optional[str] = None
         self._worker: Optional[ChatWorker] = None
+        self._message_count = 0
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -179,15 +183,15 @@ class ChatWindow(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Model selector bar ─────────────────────────────────────────
+        # ── Model bar ──────────────────────────────────────────────────
         model_bar = QWidget()
         model_bar.setObjectName("modelBar")
+        model_bar.setFixedHeight(52)
         model_bar_layout = QHBoxLayout(model_bar)
         model_bar_layout.setContentsMargins(16, 8, 16, 8)
-        model_bar_layout.setSpacing(12)
+        model_bar_layout.setSpacing(8)
 
-        model_bar_layout.addStretch()
-
+        # Model selector on the left
         self.model_selector = QComboBox()
         self.model_selector.setObjectName("modelSelector")
         self.model_selector.addItems(["llama3", "llama2", "mistral"])
@@ -196,14 +200,39 @@ class ChatWindow(QWidget):
 
         model_bar_layout.addStretch()
 
+        # TTS checkbox (center-right)
         self.tts_checkbox = QCheckBox("🔊 TTS")
         self.tts_checkbox.setObjectName("ttsCheckbox")
         self.tts_checkbox.setToolTip("Enable text-to-speech for responses")
         model_bar_layout.addWidget(self.tts_checkbox)
 
+        # Profile / user icon on the far right
+        self.profile_btn = QPushButton("JW")
+        self.profile_btn.setObjectName("profileBtn")
+        self.profile_btn.setToolTip("Profile")
+        self.profile_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        model_bar_layout.addWidget(self.profile_btn)
+
         root.addWidget(model_bar)
 
-        # ── Scroll area — message bubbles ──────────────────────────────
+        # ── Stacked: welcome screen OR chat scroll area ────────────────
+        self._content_stack = QStackedWidget()
+        self._content_stack.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
+        # [0] Welcome screen
+        welcome_widget = QWidget()
+        welcome_widget.setObjectName("chatArea")
+        welcome_layout = QVBoxLayout(welcome_widget)
+        welcome_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._welcome_label = QLabel("How can I help you today?")
+        self._welcome_label.setObjectName("welcomeText")
+        self._welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        welcome_layout.addWidget(self._welcome_label)
+        self._content_stack.addWidget(welcome_widget)   # index 0
+
+        # [1] Scroll area — message bubbles
         self._scroll_area = QScrollArea()
         self._scroll_area.setObjectName("chatScroll")
         self._scroll_area.setWidgetResizable(True)
@@ -214,34 +243,54 @@ class ChatWindow(QWidget):
         self._messages_container = QWidget()
         self._messages_container.setObjectName("messagesContainer")
         self._messages_layout = QVBoxLayout(self._messages_container)
-        self._messages_layout.setContentsMargins(0, 16, 0, 16)
-        self._messages_layout.setSpacing(4)
+        self._messages_layout.setContentsMargins(0, 24, 0, 24)
+        self._messages_layout.setSpacing(2)
         self._messages_layout.addStretch()  # pushes bubbles to the top
 
         self._scroll_area.setWidget(self._messages_container)
-        root.addWidget(self._scroll_area, stretch=1)
+        self._content_stack.addWidget(self._scroll_area)   # index 1
+
+        # Start on welcome screen
+        self._content_stack.setCurrentIndex(0)
+
+        root.addWidget(self._content_stack, stretch=1)
 
         # ── Hidden QTextEdit — keeps backward compat for tests ─────────
-        # Tests assert isinstance(chat_window.chat_display, QTextEdit)
-        # and call .toPlainText() / .isReadOnly().
         self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)
         self.chat_display.setVisible(False)
         self.chat_display.setMaximumHeight(0)
         root.addWidget(self.chat_display)
 
-        # ── Input bar ──────────────────────────────────────────────────
-        input_bar = QWidget()
-        input_bar.setObjectName("inputBar")
-        input_layout = QHBoxLayout(input_bar)
-        input_layout.setContentsMargins(16, 12, 16, 12)
-        input_layout.setSpacing(10)
+        # ── Input outer — centers the pill ─────────────────────────────
+        input_outer = QWidget()
+        input_outer.setObjectName("inputOuter")
+        input_outer_layout = QVBoxLayout(input_outer)
+        input_outer_layout.setContentsMargins(16, 8, 16, 16)
+        input_outer_layout.setSpacing(0)
+
+        # Center-aligning container
+        input_center_row = QHBoxLayout()
+        input_center_row.setSpacing(0)
+        input_center_row.addStretch()
+
+        # Pill widget
+        self._input_pill = QWidget()
+        self._input_pill.setObjectName("inputPill")
+        self._input_pill.setMinimumWidth(300)
+        self._input_pill.setMaximumWidth(768)
+        self._input_pill.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
+        pill_layout = QHBoxLayout(self._input_pill)
+        pill_layout.setContentsMargins(16, 6, 8, 6)
+        pill_layout.setSpacing(8)
 
         self.input_field = ExpandingTextEdit()
         self.input_field.returnPressed.connect(self.send_message)
-        input_layout.addWidget(self.input_field, stretch=1)
+        pill_layout.addWidget(self.input_field, stretch=1)
 
-        self.send_button = QPushButton("➤")
+        self.send_button = QPushButton("↑")
         self.send_button.setObjectName("sendBtn")
         self.send_button.setToolTip("Send message")
         self.send_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -249,9 +298,17 @@ class ChatWindow(QWidget):
         self.send_button.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
         )
-        input_layout.addWidget(self.send_button)
+        # Align button to the bottom of the pill so it sits above the baseline
+        pill_layout.addWidget(
+            self.send_button,
+            alignment=Qt.AlignmentFlag.AlignBottom,
+        )
 
-        root.addWidget(input_bar)
+        input_center_row.addWidget(self._input_pill)
+        input_center_row.addStretch()
+
+        input_outer_layout.addLayout(input_center_row)
+        root.addWidget(input_outer)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -267,7 +324,7 @@ class ChatWindow(QWidget):
         self.input_field.setEnabled(False)
         self.send_button.setEnabled(False)
 
-        # Show user bubble immediately
+        # Show user bubble immediately; switch to chat view
         self._add_message("user", message)
         self.input_field.clear()
 
@@ -307,6 +364,12 @@ class ChatWindow(QWidget):
 
     def _add_message(self, role: str, content: str) -> None:
         """Append a MessageBubble and keep the hidden QTextEdit in sync."""
+        # Switch from welcome screen to chat view on first message
+        if self._message_count == 0:
+            self._content_stack.setCurrentIndex(1)
+
+        self._message_count += 1
+
         # Visual bubble
         bubble = MessageBubble(role, content, parent=self._messages_container)
         # Insert before the trailing stretch (last item)

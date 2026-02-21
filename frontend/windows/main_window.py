@@ -6,7 +6,7 @@ Structure
 QMainWindow
   └── central QWidget (root QHBoxLayout)
         └── QSplitter (Horizontal)
-              ├── Sidebar  (fixed 260 px)
+              ├── Sidebar  (collapsible, default 260 px)
               └── QStackedWidget
                     ├── [0] ChatWindow
                     └── [1] ImageWindow
@@ -24,7 +24,7 @@ E2E tests rely on:
     isinstance(tabs, QTabWidget) → True  (shim inherits QTabWidget)
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         # Apply global stylesheet
         self.setStyleSheet(APP_STYLESHEET)
 
+        self._sidebar_visible = True
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -111,26 +112,26 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(0)
 
         # ── Splitter ───────────────────────────────────────────────────
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setHandleWidth(1)
-        splitter.setChildrenCollapsible(False)
-        root_layout.addWidget(splitter)
+        self._splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._splitter.setHandleWidth(1)
+        self._splitter.setChildrenCollapsible(True)
+        root_layout.addWidget(self._splitter)
 
         # ── Sidebar ────────────────────────────────────────────────────
         self._sidebar = Sidebar()
-        splitter.addWidget(self._sidebar)
-        splitter.setStretchFactor(0, 0)   # sidebar doesn't stretch
+        self._splitter.addWidget(self._sidebar)
+        self._splitter.setStretchFactor(0, 0)   # sidebar doesn't stretch
 
         # ── Stacked content area ───────────────────────────────────────
         self._stack = QStackedWidget()
         self._stack.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        splitter.addWidget(self._stack)
-        splitter.setStretchFactor(1, 1)   # content area takes remaining space
+        self._splitter.addWidget(self._stack)
+        self._splitter.setStretchFactor(1, 1)   # content area takes remaining space
 
         # Lock sidebar width after the splitter is set up
-        splitter.setSizes([Sidebar._FIXED_WIDTH, self.width() - Sidebar._FIXED_WIDTH])
+        self._splitter.setSizes([Sidebar._FIXED_WIDTH, self.width() - Sidebar._FIXED_WIDTH])
 
         # ── Child windows ──────────────────────────────────────────────
         self.chat_window = ChatWindow()
@@ -146,6 +147,7 @@ class MainWindow(QMainWindow):
         self.tabs = _TabsShim(self._stack)
 
         # ── Wire sidebar signals ───────────────────────────────────────
+        self._sidebar.sidebar_toggled.connect(self._on_sidebar_toggled)
         self._sidebar.mode_changed.connect(self._on_mode_changed)
         self._sidebar.new_chat_requested.connect(self._on_new_chat)
         self._sidebar.conversation_selected.connect(self._on_conversation_selected)
@@ -154,6 +156,17 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Sidebar signal handlers
     # ------------------------------------------------------------------
+
+    def _on_sidebar_toggled(self) -> None:
+        """Collapse or expand the sidebar by animating its width."""
+        if self._sidebar_visible:
+            # Collapse: animate to 0
+            self._splitter.setSizes([0, self.width()])
+            self._sidebar_visible = False
+        else:
+            # Expand: restore default width
+            self._splitter.setSizes([Sidebar._FIXED_WIDTH, self.width() - Sidebar._FIXED_WIDTH])
+            self._sidebar_visible = True
 
     def _on_mode_changed(self, mode: str) -> None:
         """Switch main area between Chat (0) and Image Generation (1)."""
@@ -168,6 +181,7 @@ class MainWindow(QMainWindow):
         # Clear chat and reset session
         cw = self.chat_window
         cw.session_id = None
+        cw._message_count = 0
 
         # Clear message bubbles
         layout = cw._messages_layout
@@ -178,6 +192,9 @@ class MainWindow(QMainWindow):
 
         # Clear hidden display
         cw.chat_display.clear()
+
+        # Return to welcome screen
+        cw._content_stack.setCurrentIndex(0)
 
     def _on_conversation_selected(self, session_id: str) -> None:
         """Load an existing conversation into the chat window."""
