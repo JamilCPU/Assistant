@@ -49,7 +49,3 @@ python -m frontend.main
 - `backend/` - FastAPI gateway, services, tools, storage
 - `frontend/` - PySide6 desktop application
 - `config/` - Configuration files
-
-## License
-
-MIT
