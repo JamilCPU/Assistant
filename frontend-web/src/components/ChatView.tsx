@@ -15,6 +15,12 @@ export default function ChatView() {
 
   const hasMessages = state.messages.length > 0;
 
+  // Show loading dots only when loading AND no streaming assistant message exists yet
+  const lastMsg = state.messages[state.messages.length - 1];
+  const showLoadingDots =
+    state.loading &&
+    (!lastMsg || lastMsg.role !== 'assistant' || (!lastMsg.streaming && lastMsg.content === ''));
+
   return (
     <div className="flex flex-col h-full">
       {hasMessages ? (
@@ -23,7 +29,7 @@ export default function ChatView() {
             {state.messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            {state.loading && (
+            {showLoadingDots && (
               <div className="flex justify-start mb-2">
                 <div className="max-w-[70%]">
                   <span className="text-xs font-semibold text-text-secondary block mb-1">Assistant</span>

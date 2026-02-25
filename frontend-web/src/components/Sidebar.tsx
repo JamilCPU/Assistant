@@ -73,6 +73,16 @@ export default function Sidebar() {
         >
           🎨 Image Generation
         </button>
+        <button
+          onClick={() => setMode('models')}
+          className={`text-left px-3 py-2 rounded-md text-[13px] transition-colors cursor-pointer ${
+            state.mode === 'models'
+              ? 'bg-button-active text-text-primary'
+              : 'text-text-secondary hover:bg-button-hover hover:text-text-primary'
+          }`}
+        >
+          🧠 Models
+        </button>
       </div>
 
       {/* History */}

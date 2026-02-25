@@ -5,7 +5,7 @@ interface MessageBubbleProps {
 }
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
-  const { role, content } = message;
+  const { role, content, streaming } = message;
 
   if (role === 'user') {
     return (
@@ -38,6 +38,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         <span className="text-xs font-semibold text-text-secondary block mb-1">Assistant</span>
         <p className="text-sm leading-relaxed text-text-primary whitespace-pre-wrap break-words">
           {content}
+          {streaming && (
+            <span className="inline-block w-[2px] h-[1em] bg-text-primary ml-0.5 animate-pulse align-middle" />
+          )}
         </p>
       </div>
     </div>

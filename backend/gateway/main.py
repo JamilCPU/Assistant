@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.gateway.middleware import LoggingMiddleware
 from backend.gateway.router import router
+from backend.gateway.ollama_router import ollama_router
 from backend.storage.config import get_config
 from backend.storage.database import get_database
 
@@ -48,6 +49,7 @@ app.add_middleware(LoggingMiddleware)
 
 # Include routers
 app.include_router(router)
+app.include_router(ollama_router)
 
 
 @app.get("/")

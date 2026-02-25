@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import ChatView from './components/ChatView';
 import ImageView from './components/ImageView';
+import ModelManager from './components/ModelManager';
+import OllamaStatus from './components/OllamaStatus';
 
 function AppLayout() {
   const { state, dispatch } = useChat();
@@ -39,8 +41,13 @@ function AppLayout() {
         )}
 
         {/* Mode content */}
-        {state.mode === 'chat' ? <ChatView /> : <ImageView />}
+        {state.mode === 'chat' && <ChatView />}
+        {state.mode === 'image' && <ImageView />}
+        {state.mode === 'models' && <ModelManager />}
       </div>
+
+      {/* Always-visible Ollama status indicator */}
+      <OllamaStatus />
     </div>
   );
 }

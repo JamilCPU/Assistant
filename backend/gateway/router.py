@@ -48,10 +48,21 @@ async def chat(
     # Save user message
     await db.save_message(session_id, "user", request.message)
     
+    # Build full conversation history to send to the model so it has context.
+    # The user message was just saved, so get_conversation now includes it.
+    history = await db.get_conversation(session_id)
+    ollama_messages = []
+    if request.system_prompt:
+        ollama_messages.append({"role": "system", "content": request.system_prompt})
+    for msg in history:
+        if msg["role"] in ("user", "assistant"):
+            ollama_messages.append({"role": msg["role"], "content": msg["content"]})
+    
     # Generate response with tools
     result = await chat_service.generate(
         prompt=request.message,
         system_prompt=request.system_prompt,
+        messages=ollama_messages if ollama_messages else None,
         tools=tool_schemas if tool_schemas else None,
         model=request.model
     )

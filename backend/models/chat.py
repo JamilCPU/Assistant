@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
+# ── Chat ──────────────────────────────────────────────────────────────────
+
 class ChatRequest(BaseModel):
     """Chat request model."""
     message: str
@@ -26,6 +28,8 @@ class ChatResponse(BaseModel):
     tool_calls: Optional[List[ToolCall]] = None
     audio_url: Optional[str] = None  # TTS audio URL if speak=True
 
+
+# ── Conversations ─────────────────────────────────────────────────────────
 
 class ConversationMessage(BaseModel):
     """Conversation message model."""
@@ -53,3 +57,44 @@ class SessionInfo(BaseModel):
 class SessionsListResponse(BaseModel):
     """Sessions list response model."""
     sessions: List[SessionInfo]
+
+
+# ── Ollama status / models ────────────────────────────────────────────────
+
+class OllamaStatusResponse(BaseModel):
+    """Ollama health-check response."""
+    online: bool
+    model_count: int = 0
+
+
+class OllamaModelInfo(BaseModel):
+    """Summary info for one Ollama model."""
+    name: str
+    size: int = 0
+    modified_at: str = ""
+    family: str = ""
+    parameter_size: str = ""
+    quantization_level: str = ""
+
+
+class OllamaModelDetail(BaseModel):
+    """Detailed info returned by /api/show."""
+    name: str
+    family: str = ""
+    parameter_size: str = ""
+    quantization_level: str = ""
+    format: str = ""
+    template: str = ""
+    system: str = ""
+    license: str = ""
+    modelfile: str = ""
+
+
+class OllamaModelsListResponse(BaseModel):
+    """List of Ollama models with metadata."""
+    models: List[OllamaModelInfo]
+
+
+class OllamaPullRequest(BaseModel):
+    """Request to pull/download a model."""
+    name: str
