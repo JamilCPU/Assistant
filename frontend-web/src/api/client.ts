@@ -326,6 +326,10 @@ export function chatStream(
             try {
               const data = JSON.parse(jsonStr);
 
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/26eaa012-58ce-4ebb-9489-918cfb622f15',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.ts:chatStream',hypothesisId:'H2_H3',message:'SSE event dispatched',data:{currentEvent,jsonPreview:jsonStr.slice(0,150)},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
+
               switch (currentEvent) {
                 case 'token':
                   callbacks.onToken(data.content);

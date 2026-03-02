@@ -140,6 +140,10 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
         full_text = ""
         collected_tool_calls = []
 
+        # #region agent log
+        print(f"[AGENT_LOG] router:stream_start | tool_schemas_sample={str(tool_schemas[0] if tool_schemas else 'NONE')[:300]}", flush=True)
+        # #endregion
+
         try:
             async for chunk in _chat_service.generate_stream(
                 prompt=request.message,
@@ -153,6 +157,9 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
                 if kind == "token":
                     content = chunk["content"]
                     full_text += content
+                    # #region agent log
+                    print(f"[AGENT_LOG] router:token_event | content_preview={repr(content[:80])}", flush=True)
+                    # #endregion
                     yield {
                         "event": "token",
                         "data": json.dumps({"content": content}),
@@ -161,6 +168,9 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
                 elif kind == "tool_call":
                     tc = {"name": chunk["name"], "arguments": chunk["arguments"]}
                     collected_tool_calls.append(tc)
+                    # #region agent log
+                    print(f"[AGENT_LOG] router:tool_call_event | tc={tc}", flush=True)
+                    # #endregion
                     yield {
                         "event": "tool_call",
                         "data": json.dumps(tc),
