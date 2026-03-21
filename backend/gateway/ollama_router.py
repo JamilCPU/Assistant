@@ -1,5 +1,6 @@
 """Ollama management and streaming chat routes."""
 
+import asyncio
 import json
 import uuid
 
@@ -114,15 +115,18 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
     Streaming chat endpoint.
 
     SSE events emitted:
-        event: token   – data: {"content": "..."}
+        event: token     – data: {"content": "..."}
         event: tool_call – data: {"name": "...", "arguments": {...}}
-        event: done    – data: {"session_id": "...", "audio_url": null}
-        event: error   – data: {"error": "..."}
+        event: done      – data: {"session_id": "...", "audio_url": null}
+        event: error     – data: {"error": "..."}
     """
     session_id = request.session_id or str(uuid.uuid4())
 
     # Save user message before streaming begins
     await _db.save_message(session_id, "user", request.message)
+
+    # Check if this is the first message so we can auto-title later
+    is_first = await _db.is_first_message(session_id)
 
     # Build full conversation history so the model has context across turns.
     # The user message was just saved, so get_conversation includes it.
@@ -134,15 +138,28 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
         if msg["role"] in ("user", "assistant"):
             ollama_messages.append({"role": msg["role"], "content": msg["content"]})
 
+    # Inject upload context if upload_ids provided
+    if request.upload_ids:
+        uploads = []
+        for uid in request.upload_ids:
+            u = await _db.get_upload(uid)
+            if u:
+                uploads.append(u)
+        if uploads:
+            file_list = "\n".join(
+                f"- {u['original_filename']} at {u['stored_path']}" for u in uploads
+            )
+            upload_msg = (
+                "The user has uploaded the following files that you can read with the read_file tool:\n"
+                + file_list
+            )
+            ollama_messages.insert(0, {"role": "system", "content": upload_msg})
+
     tool_schemas = _tool_registry.get_tool_schemas() or None
 
     async def event_generator():
         full_text = ""
         collected_tool_calls = []
-
-        # #region agent log
-        print(f"[AGENT_LOG] router:stream_start | tool_schemas_sample={str(tool_schemas[0] if tool_schemas else 'NONE')[:300]}", flush=True)
-        # #endregion
 
         try:
             async for chunk in _chat_service.generate_stream(
@@ -157,9 +174,6 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
                 if kind == "token":
                     content = chunk["content"]
                     full_text += content
-                    # #region agent log
-                    print(f"[AGENT_LOG] router:token_event | content_preview={repr(content[:80])}", flush=True)
-                    # #endregion
                     yield {
                         "event": "token",
                         "data": json.dumps({"content": content}),
@@ -168,9 +182,6 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
                 elif kind == "tool_call":
                     tc = {"name": chunk["name"], "arguments": chunk["arguments"]}
                     collected_tool_calls.append(tc)
-                    # #region agent log
-                    print(f"[AGENT_LOG] router:tool_call_event | tc={tc}", flush=True)
-                    # #endregion
                     yield {
                         "event": "tool_call",
                         "data": json.dumps(tc),
@@ -188,38 +199,110 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
 
         # ── Post-stream processing ────────────────────────────────────
 
-        # Execute any tool calls
+        # Execute tool calls and perform a second generation pass
         if collected_tool_calls:
+            # Build the assistant message that contains the tool calls
+            # (persisted with metadata so we can log correctly)
+            assistant_msg_id = await _db.save_message(
+                session_id, "assistant", full_text,
+                metadata={"tool_calls": collected_tool_calls},
+            )
+
+            # Add the assistant's (possibly partial) response to the message list
+            # so the model knows what it said before requesting the tools.
+            updated_messages = list(ollama_messages)
+            updated_messages.append({"role": "assistant", "content": full_text})
+
+            # Execute each tool and append a proper tool-role message
             for tc in collected_tool_calls:
                 tool_name = tc["name"]
                 tool_args = tc.get("arguments", {})
                 try:
                     tool_result = await _tool_registry.execute_tool(tool_name, tool_args)
-                    message_id = await _db.save_message(
-                        session_id, "assistant", full_text,
-                        metadata={"tool_calls": [tc]},
-                    )
                     await _db.log_tool_execution(
-                        session_id, message_id, tool_name,
+                        session_id, assistant_msg_id, tool_name,
                         tool_args, tool_result, success=True,
                     )
-                    full_text += f"\n\n[Tool {tool_name} executed: {str(tool_result)[:100]}...]"
-                except Exception as e:
+                    updated_messages.append({
+                        "role": "tool",
+                        "content": json.dumps(tool_result),
+                        "name": tool_name,
+                    })
+                except Exception as tool_err:
                     await _db.log_tool_execution(
-                        session_id, None, tool_name,
-                        tool_args, {"error": str(e)}, success=False,
+                        session_id, assistant_msg_id, tool_name,
+                        tool_args, {"error": str(tool_err)}, success=False,
                     )
-                    full_text += f"\n\n[Tool {tool_name} failed: {str(e)}]"
+                    updated_messages.append({
+                        "role": "tool",
+                        "content": json.dumps({"error": str(tool_err)}),
+                        "name": tool_name,
+                    })
 
-        # Persist final assistant message
-        await _db.save_message(session_id, "assistant", full_text)
+            # Second generation pass — stream follow-up response to client
+            follow_up_text = ""
+            try:
+                async for chunk in _chat_service.generate_stream(
+                    prompt=request.message,
+                    system_prompt=request.system_prompt,
+                    messages=updated_messages,
+                    tools=tool_schemas,
+                    model=request.model,
+                ):
+                    kind = chunk.get("type")
+                    if kind == "token":
+                        content = chunk["content"]
+                        follow_up_text += content
+                        full_text += content
+                        yield {
+                            "event": "token",
+                            "data": json.dumps({"content": content}),
+                        }
+                    elif kind == "done":
+                        pass
+            except Exception as e:
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": str(e)}),
+                }
+                return
+
+            # Persist the follow-up assistant message
+            await _db.save_message(session_id, "assistant", follow_up_text)
+        else:
+            # No tool calls — persist the assistant response directly
+            await _db.save_message(session_id, "assistant", full_text)
+
+        # ── Auto-title (fire and forget) ──────────────────────────────
+        if is_first:
+            user_message = request.message
+
+            async def _generate_title() -> None:
+                try:
+                    title_prompt = (
+                        f"Summarize this user message as a conversation title "
+                        f"in 5 words or fewer, no punctuation: {user_message}"
+                    )
+                    result = await _chat_service.generate(
+                        prompt=title_prompt,
+                        model=request.model,
+                    )
+                    raw_title = result.get("text", "").strip()
+                    if raw_title:
+                        # Trim to 60 chars to keep sidebar tidy
+                        title = raw_title[:60]
+                        await _db.update_session_title(session_id, title)
+                except Exception:
+                    pass  # title generation is best-effort
+
+            asyncio.create_task(_generate_title())
 
         # TTS (optional)
         audio_url = None
         if request.speak:
             try:
-                tts_result = await _tts_service.speak(full_text)
-                audio_url = tts_result.get("audio_path")
+                tts_result = await _tts_service.speak(full_text, voice=request.tts_voice)
+                audio_url = tts_result.get("audio_url") or tts_result.get("audio_path")
             except Exception:
                 pass
 

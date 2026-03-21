@@ -4,7 +4,9 @@ import TopBar from './components/TopBar';
 import ChatView from './components/ChatView';
 import ImageView from './components/ImageView';
 import ModelManager from './components/ModelManager';
+import GalleryView from './components/GalleryView';
 import OllamaStatus from './components/OllamaStatus';
+import Auto1111Status from './components/Auto1111Status';
 
 function AppLayout() {
   const { state, dispatch } = useChat();
@@ -44,10 +46,12 @@ function AppLayout() {
         {state.mode === 'chat' && <ChatView />}
         {state.mode === 'image' && <ImageView />}
         {state.mode === 'models' && <ModelManager />}
+        {state.mode === 'gallery' && <GalleryView />}
       </div>
 
-      {/* Always-visible Ollama status indicator */}
+      {/* Always-visible status indicators */}
       <OllamaStatus />
+      <Auto1111Status />
     </div>
   );
 }

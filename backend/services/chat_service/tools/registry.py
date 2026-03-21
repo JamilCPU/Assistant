@@ -3,7 +3,7 @@
 from typing import Dict, List, Optional, Any
 
 from backend.services.chat_service.tools.base import Tool
-from backend.services.chat_service.tools.filesystem import ReadFileTool, SearchFilesTool
+from backend.services.chat_service.tools.filesystem import ListUploadsTool, ReadFileTool, SearchFilesTool
 from backend.services.chat_service.tools.web import FetchUrlTool, WebSearchTool
 from backend.services.chat_service.tools.system import LaunchAppTool
 
@@ -21,6 +21,7 @@ class ToolRegistry:
         # Filesystem tools
         self.register(SearchFilesTool())
         self.register(ReadFileTool())
+        self.register(ListUploadsTool())
         
         # Web tools
         self.register(WebSearchTool())

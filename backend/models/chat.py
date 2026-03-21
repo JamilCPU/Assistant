@@ -13,6 +13,8 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     speak: bool = False  # TTS option
     system_prompt: Optional[str] = None
+    tts_voice: Optional[str] = None  # Override the default TTS voice
+    upload_ids: Optional[List[str]] = None  # Uploaded file references for this turn
 
 
 class ToolCall(BaseModel):

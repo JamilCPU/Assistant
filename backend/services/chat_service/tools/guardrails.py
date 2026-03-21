@@ -70,10 +70,10 @@ class Guardrails:
             ValueError: If path is not allowed
         """
         normalized = self.normalize_path(file_path)
-        
-        if not self.is_path_allowed(normalized):
+
+        if not self.is_path_allowed(normalized) and not self.is_path_in_uploads(normalized):
             raise ValueError(f"Path {normalized} is not in the allowlist")
-        
+
         return normalized
     
     def check_file_size(self, file_path: Path) -> None:
@@ -127,20 +127,33 @@ class Guardrails:
     def validate_tool_call(self, tool_name: str, args: Dict, mode: str = "local") -> None:
         """
         Validate a tool call before execution.
-        
+
         Args:
             tool_name: Name of the tool
             args: Tool arguments
-            mode: Permission mode (local or remote)
-            
+            mode: Permission mode ("local" or "remote")
+
         Raises:
-            ValueError: If tool call is not allowed
+            ValueError: If tool call is not allowed in this mode
         """
-        # Rate limiting could be added here
-        # For now, just check permissions
-        
-        # This will be called by the tool registry
-        pass
+        if mode == "remote":
+            restricted = self.config.get("permissions.remote_mode", "restricted")
+            if restricted == "restricted":
+                safe_tools = {"read_file", "search_files", "web_search", "list_uploads"}
+                if tool_name not in safe_tools:
+                    raise ValueError(
+                        f"Tool '{tool_name}' is not available in remote mode. "
+                        f"Allowed tools: {', '.join(sorted(safe_tools))}"
+                    )
+
+    def is_path_in_uploads(self, path: Path) -> bool:
+        """Return True if the path is within the uploads directory (always allowed)."""
+        uploads_dir = Path("./backend/storage/data/uploads").resolve()
+        try:
+            path.relative_to(uploads_dir)
+            return True
+        except ValueError:
+            return False
 
 
 # Global guardrails instance
