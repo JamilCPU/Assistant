@@ -1,11 +1,14 @@
-"""Filesystem tools: search_files, read_file."""
+"""Filesystem tools: search_files, read_file, list_uploads."""
 
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from backend.services.chat_service.tools.base import Tool
 from backend.services.chat_service.tools.guardrails import get_guardrails
+
+# Uploads directory — always allowed for read_file and search_files
+_UPLOADS_DIR = Path("./backend/storage/data/uploads").resolve()
 
 
 class SearchFilesTool(Tool):
@@ -45,8 +48,9 @@ class SearchFilesTool(Tool):
             return {"files": [], "error": "Query is required"}
         
         results = []
-        allowlist = self.guardrails.allowlist
-        
+        # Include uploads directory in addition to the configured allowlist
+        allowlist: List[str] = list(self.guardrails.allowlist) + [str(_UPLOADS_DIR)]
+
         for allowed_dir in allowlist:
             allowed_path = Path(allowed_dir).resolve()
             
@@ -116,9 +120,20 @@ class ReadFileTool(Tool):
             return {"error": "Path is required"}
         
         try:
-            # Validate and normalize path
-            file_path = self.guardrails.validate_file_path(file_path_str)
-            
+            # Validate and normalize path — also allow the uploads directory
+            normalized = self.guardrails.normalize_path(file_path_str)
+            uploads_allowed = False
+            try:
+                normalized.relative_to(_UPLOADS_DIR)
+                uploads_allowed = True
+            except ValueError:
+                pass
+
+            if uploads_allowed:
+                file_path = normalized
+            else:
+                file_path = self.guardrails.validate_file_path(file_path_str)
+
             # Check file size
             self.guardrails.check_file_size(file_path)
             
@@ -150,3 +165,55 @@ class ReadFileTool(Tool):
             return {"error": str(e)}
         except Exception as e:
             return {"error": f"Error reading file: {str(e)}"}
+
+
+class ListUploadsTool(Tool):
+    """Tool for listing uploaded files in the current session."""
+
+    def __init__(self):
+        """Initialize list uploads tool."""
+        super().__init__(
+            name="list_uploads",
+            description="List files the user has uploaded in this session that you can read with read_file",
+            schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "The current session ID",
+                    }
+                },
+                "required": ["session_id"],
+            },
+            required_permissions=["read_file"],
+        )
+
+    async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        List uploads for the given session.
+
+        Args:
+            args: Tool arguments with 'session_id' key
+
+        Returns:
+            Dictionary with 'uploads' list of {filename, path, size}
+        """
+        session_id = args.get("session_id", "")
+        if not session_id:
+            return {"uploads": [], "error": "session_id is required"}
+
+        try:
+            from backend.storage.database import get_database
+            db = get_database()
+            rows = await db.get_session_uploads(session_id)
+            uploads = [
+                {
+                    "filename": r["original_filename"],
+                    "path": r["stored_path"],
+                    "size": r["file_size"],
+                }
+                for r in rows
+            ]
+            return {"uploads": uploads, "count": len(uploads)}
+        except Exception as e:
+            return {"uploads": [], "error": f"Error listing uploads: {str(e)}"}

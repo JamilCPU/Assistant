@@ -13,6 +13,8 @@ export interface ChatRequest {
   model?: string | null;
   speak?: boolean;
   system_prompt?: string | null;
+  tts_voice?: string | null;
+  upload_ids?: string[] | null;
 }
 
 export interface ToolCall {
@@ -68,14 +70,97 @@ export interface ImageGenerateRequest {
   cfg_scale?: number;
   sampler?: string | null;
   lora?: string[] | null;
+  seed?: number;
+  batch_size?: number;
+  batch_count?: number;
+  restore_faces?: boolean;
+  tiling?: boolean;
+  clip_skip?: number;
+  enable_hr?: boolean;
+  hr_scale?: number;
+  hr_upscaler?: string | null;
+  hr_second_pass_steps?: number;
+  denoising_strength?: number;
+  hr_resize_x?: number;
+  hr_resize_y?: number;
+  styles?: string[] | null;
 }
 
 export interface ImageGenerateResponse {
   image_path: string;
   image_url?: string | null;
+  images: string[];
   metadata: Record<string, unknown>;
   filename: string;
 }
+
+export interface ImageRecord {
+  id: number;
+  filename: string;
+  filepath: string;
+  prompt: string;
+  negative_prompt?: string | null;
+  model_name?: string | null;
+  lora_used?: string[] | null;
+  parameters: Record<string, unknown>;
+  created_at: string;
+  file_size: number;
+  width: number;
+  height: number;
+}
+
+export interface ImagesPaginatedResponse {
+  images: ImageRecord[];
+  total: number;
+  page: number;
+  per_page: number;
+}
+
+// ── Settings types ────────────────────────────────────────────────────────
+
+export interface ChatSettings {
+  default_model: string;
+  system_prompt: string;
+}
+
+export interface ImageSettings {
+  default_model: string;
+  default_sampler: string;
+  default_steps: number;
+  default_cfg: number;
+  default_width: number;
+  default_height: number;
+}
+
+export interface TTSSettings {
+  enabled: boolean;
+  default_voice: string;
+}
+
+export interface ToolsSettings {
+  filesystem_allowlist: string[];
+  max_file_size_mb: number;
+}
+
+export interface ServerSettings {
+  api_key: string;
+}
+
+export interface UserSettings {
+  chat: ChatSettings;
+  image: ImageSettings;
+  tts: TTSSettings;
+  tools: ToolsSettings;
+  server: ServerSettings;
+}
+
+export type PartialUserSettings = {
+  chat?: Partial<ChatSettings>;
+  image?: Partial<ImageSettings>;
+  tts?: Partial<TTSSettings>;
+  tools?: Partial<ToolsSettings>;
+  server?: Partial<ServerSettings>;
+};
 
 // ── Ollama types ─────────────────────────────────────────────────────────
 
@@ -181,10 +266,46 @@ export function getConversation(sessionId: string, apiKey?: string) {
   return request<ConversationResponse>('GET', `/api/conversations/${sessionId}`, undefined, apiKey);
 }
 
+export function renameConversation(sessionId: string, title: string, apiKey?: string) {
+  return request<{ session_id: string; title: string }>(
+    'PATCH',
+    `/api/conversations/${sessionId}`,
+    { title },
+    apiKey,
+  );
+}
+
+/**
+ * Build a URL for downloading a conversation export.
+ * The download is triggered via window.open() rather than fetch.
+ */
+export function exportConversationUrl(
+  sessionId: string,
+  format: 'json' | 'markdown' | 'txt',
+): string {
+  return `${BASE}/api/conversations/${sessionId}/export?format=${format}`;
+}
+
 // ── Public API – Ollama endpoints ────────────────────────────────────────
 
 export function ollamaStatus(apiKey?: string) {
   return request<OllamaStatusResponse>('GET', '/api/ollama/status', undefined, apiKey);
+}
+
+export function auto1111Status(apiKey?: string) {
+  return request<OllamaStatusResponse>('GET', '/api/auto1111/status', undefined, apiKey);
+}
+
+export function auto1111Samplers(apiKey?: string) {
+  return request<{ samplers: string[] }>('GET', '/api/auto1111/samplers', undefined, apiKey);
+}
+
+export function auto1111Upscalers(apiKey?: string) {
+  return request<{ upscalers: string[] }>('GET', '/api/auto1111/upscalers', undefined, apiKey);
+}
+
+export function auto1111Styles(apiKey?: string) {
+  return request<{ styles: string[] }>('GET', '/api/auto1111/styles', undefined, apiKey);
 }
 
 export function ollamaModels(apiKey?: string) {
@@ -272,6 +393,51 @@ export function ollamaPull(
   return controller;
 }
 
+// ── Public API – images ───────────────────────────────────────────────────
+
+export function listImagesPaginated(
+  params: { page?: number; per_page?: number; prompt?: string; model?: string },
+  apiKey?: string,
+) {
+  const qs = new URLSearchParams();
+  if (params.page != null) qs.set('page', String(params.page));
+  if (params.per_page != null) qs.set('per_page', String(params.per_page));
+  if (params.prompt) qs.set('prompt', params.prompt);
+  if (params.model) qs.set('model', params.model);
+  const query = qs.toString();
+  return request<ImagesPaginatedResponse>(
+    'GET',
+    `/api/images${query ? `?${query}` : ''}`,
+    undefined,
+    apiKey,
+  );
+}
+
+export function getImage(id: number, apiKey?: string) {
+  return request<ImageRecord>('GET', `/api/images/${id}`, undefined, apiKey);
+}
+
+export async function deleteImage(id: number, apiKey?: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/images/${id}`, {
+    method: 'DELETE',
+    headers: buildHeaders(apiKey),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`${res.status}: ${text}`);
+  }
+}
+
+// ── Public API – settings ─────────────────────────────────────────────────
+
+export function getSettings(apiKey?: string) {
+  return request<UserSettings>('GET', '/api/settings', undefined, apiKey);
+}
+
+export function updateSettings(updates: PartialUserSettings, apiKey?: string) {
+  return request<UserSettings>('PUT', '/api/settings', updates, apiKey);
+}
+
 // ── Public API – streaming chat ──────────────────────────────────────────
 
 export interface ChatStreamCallbacks {
@@ -326,10 +492,6 @@ export function chatStream(
             try {
               const data = JSON.parse(jsonStr);
 
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/26eaa012-58ce-4ebb-9489-918cfb622f15',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'client.ts:chatStream',hypothesisId:'H2_H3',message:'SSE event dispatched',data:{currentEvent,jsonPreview:jsonStr.slice(0,150)},timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
-
               switch (currentEvent) {
                 case 'token':
                   callbacks.onToken(data.content);
@@ -359,4 +521,126 @@ export function chatStream(
     });
 
   return controller;
+}
+
+// ── Persona types and API ─────────────────────────────────────────────────
+
+export interface Persona {
+  id: number;
+  name: string;
+  system_prompt: string;
+  default_model?: string | null;
+  icon: string;
+  is_builtin: boolean;
+  created_at: string;
+}
+
+export interface PersonasListResponse {
+  personas: Persona[];
+}
+
+export function listPersonas(apiKey?: string): Promise<PersonasListResponse> {
+  return request<PersonasListResponse>('GET', '/api/personas', undefined, apiKey);
+}
+
+export function createPersona(
+  p: Omit<Persona, 'id' | 'is_builtin' | 'created_at'>,
+  apiKey?: string,
+): Promise<{ id: number }> {
+  return request<{ id: number }>('POST', '/api/personas', p, apiKey);
+}
+
+export function updatePersona(
+  id: number,
+  p: Partial<Omit<Persona, 'id' | 'is_builtin' | 'created_at'>>,
+  apiKey?: string,
+): Promise<{ updated: number }> {
+  return request<{ updated: number }>('PUT', `/api/personas/${id}`, p, apiKey);
+}
+
+export async function deletePersona(id: number, apiKey?: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/personas/${id}`, {
+    method: 'DELETE',
+    headers: buildHeaders(apiKey),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`${res.status}: ${text}`);
+  }
+}
+
+// ── img2img / inpainting ──────────────────────────────────────────────────
+
+export interface Img2ImgRequest {
+  prompt: string;
+  negative_prompt?: string | null;
+  model?: string | null;
+  width?: number;
+  height?: number;
+  steps?: number;
+  cfg_scale?: number;
+  sampler?: string | null;
+  lora?: string[] | null;
+  seed?: number;
+  batch_size?: number;
+  restore_faces?: boolean;
+  tiling?: boolean;
+  clip_skip?: number;
+  styles?: string[] | null;
+  // img2img specific
+  init_image: string;            // base64 or /images/ URL
+  denoising_strength?: number;
+  resize_mode?: number;          // 0=just resize, 1=crop+resize, 2=resize+fill
+  // Inpainting
+  mask?: string | null;          // base64 PNG mask
+  mask_blur?: number;
+  inpainting_fill?: number;      // 0=fill, 1=original, 2=latent noise, 3=latent nothing
+  inpaint_full_res?: boolean;
+  inpaint_full_res_padding?: number;
+}
+
+export interface Img2ImgResponse {
+  image_path: string;
+  image_url?: string | null;
+  images: string[];
+  metadata: Record<string, unknown>;
+  filename: string;
+}
+
+export function img2img(req: Img2ImgRequest, apiKey?: string): Promise<Img2ImgResponse> {
+  return request<Img2ImgResponse>('POST', '/api/image/img2img', req, apiKey);
+}
+
+// ── File upload ───────────────────────────────────────────────────────────
+
+export interface UploadResponse {
+  upload_id: string;
+  filename: string;
+  size: number;
+  stored_path: string;
+  session_id?: string | null;
+}
+
+export async function uploadFile(
+  file: File,
+  sessionId?: string,
+  apiKey?: string,
+): Promise<UploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  if (sessionId) form.append('session_id', sessionId);
+
+  const headers: Record<string, string> = {};
+  if (apiKey) headers['X-API-Key'] = apiKey;
+
+  const res = await fetch(`${BASE}/api/upload`, {
+    method: 'POST',
+    headers,
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`${res.status}: ${text}`);
+  }
+  return res.json();
 }

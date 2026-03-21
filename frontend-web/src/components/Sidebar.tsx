@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useChat, type AppMode } from '../context/ChatContext';
+import * as api from '../api/client';
+import SettingsModal from './SettingsModal';
 
 export default function Sidebar() {
-  const { state, dispatch, loadConversation } = useChat();
+  const { state, dispatch, loadConversation, refreshSessions } = useChat();
   const [search, setSearch] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  // session_id of the item currently being renamed, or null
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const filteredSessions = state.sessions.filter((s) => {
     if (!search.trim()) return true;
@@ -15,6 +22,26 @@ export default function Sidebar() {
   });
 
   const setMode = (mode: AppMode) => dispatch({ type: 'SET_MODE', mode });
+
+  const startEdit = (sessionId: string, currentTitle: string | null | undefined) => {
+    setEditingId(sessionId);
+    setEditValue(currentTitle ?? '');
+    // Focus the input on the next paint
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  };
+
+  const commitEdit = async (sessionId: string) => {
+    const trimmed = editValue.trim();
+    if (trimmed) {
+      try {
+        await api.renameConversation(sessionId, trimmed);
+        await refreshSessions();
+      } catch {
+        // ignore rename errors
+      }
+    }
+    setEditingId(null);
+  };
 
   return (
     <aside className="flex flex-col h-full bg-sidebar-bg select-none">
@@ -83,6 +110,16 @@ export default function Sidebar() {
         >
           🧠 Models
         </button>
+        <button
+          onClick={() => setMode('gallery')}
+          className={`text-left px-3 py-2 rounded-md text-[13px] transition-colors cursor-pointer ${
+            state.mode === 'gallery'
+              ? 'bg-button-active text-text-primary'
+              : 'text-text-secondary hover:bg-button-hover hover:text-text-primary'
+          }`}
+        >
+          🖼️ Gallery
+        </button>
       </div>
 
       {/* History */}
@@ -95,18 +132,47 @@ export default function Sidebar() {
         ) : (
           <ul className="flex flex-col gap-0.5">
             {filteredSessions.map((s) => (
-              <li key={s.session_id}>
-                <button
-                  onClick={() => loadConversation(s.session_id)}
-                  className={`w-full text-left px-2.5 py-2 rounded-md text-[13px] truncate transition-colors cursor-pointer ${
-                    state.sessionId === s.session_id
-                      ? 'bg-button-active text-text-primary'
-                      : 'text-text-secondary hover:bg-button-hover hover:text-text-primary'
-                  }`}
-                  title={s.title ?? s.session_id}
-                >
-                  {s.title ?? s.session_id.slice(0, 24) + '…'}
-                </button>
+              <li key={s.session_id} className="group relative">
+                {editingId === s.session_id ? (
+                  <input
+                    ref={editInputRef}
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => commitEdit(s.session_id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitEdit(s.session_id);
+                      if (e.key === 'Escape') setEditingId(null);
+                    }}
+                    className="w-full bg-button-hover text-text-primary text-[13px] px-2.5 py-2 rounded-md outline-none border border-border"
+                  />
+                ) : (
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => loadConversation(s.session_id)}
+                      className={`flex-1 text-left px-2.5 py-2 rounded-md text-[13px] truncate transition-colors cursor-pointer ${
+                        state.sessionId === s.session_id
+                          ? 'bg-button-active text-text-primary'
+                          : 'text-text-secondary hover:bg-button-hover hover:text-text-primary'
+                      }`}
+                      title={s.title ?? s.session_id}
+                    >
+                      {s.title ?? s.session_id.slice(0, 24) + '…'}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEdit(s.session_id, s.title);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 ml-1 shrink-0 w-[22px] h-[22px] flex items-center justify-center rounded text-text-muted hover:text-text-primary hover:bg-button-hover transition-all cursor-pointer"
+                      title="Rename conversation"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -115,10 +181,16 @@ export default function Sidebar() {
 
       {/* Settings */}
       <div className="px-3 py-3 shrink-0">
-        <button className="w-full text-left px-3 py-2 rounded-md text-[13px] text-text-secondary hover:bg-button-hover hover:text-text-primary transition-colors cursor-pointer">
+        <button
+          onClick={() => setShowSettings(true)}
+          className="w-full text-left px-3 py-2 rounded-md text-[13px] text-text-secondary hover:bg-button-hover hover:text-text-primary transition-colors cursor-pointer"
+        >
           ⚙️ Settings
         </button>
       </div>
+
+      {/* Settings Modal */}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
     </aside>
   );
 }

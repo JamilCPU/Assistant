@@ -2,10 +2,20 @@
 
 import asyncio
 import subprocess
+import wave
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from backend.services.base import TTSService
+
+
+def _get_wav_duration(filepath: str) -> float:
+    """Read actual duration from a WAV file header."""
+    try:
+        with wave.open(filepath, 'r') as f:
+            return f.getnframes() / float(f.getframerate())
+    except Exception:
+        return 0.0
 
 
 class PiperAdapter(TTSService):
@@ -98,14 +108,16 @@ class PiperAdapter(TTSService):
             
             # Get file size
             file_size = output_file.stat().st_size
-            
-            # Estimate duration (rough approximation)
-            # This would ideally come from Piper or audio analysis
-            duration = len(text) * 0.1  # Rough estimate: 0.1 seconds per character
-            
+
+            # Read accurate duration from WAV header
+            duration = _get_wav_duration(str(output_file))
+
+            # Build audio URL from filename so it can be served via /audio static mount
+            audio_url = f"/audio/{output_file.name}"
+
             return {
                 "audio_path": str(output_file),
-                "audio_url": None,  # Could be served via static file endpoint
+                "audio_url": audio_url,
                 "duration": duration,
                 "voice": voice,
                 "text_length": len(text)
@@ -118,16 +130,23 @@ class PiperAdapter(TTSService):
     
     async def list_voices(self) -> List[str]:
         """
-        List available voices.
-        
+        List available voices by scanning for .onnx model files.
+
         Returns:
-            List of voice names
+            List of voice names (stems of .onnx files found on disk)
         """
-        # Piper voices are typically model files
-        # This would need to scan for .onnx files in the model directory
-        # For now, return a default list
-        return [
-            "en_US-lessac-medium",
-            "en_US-lessac-low",
-            "en_US-amy-medium"
-        ]
+        voices: List[str] = []
+        piper_dir = Path(self.piper_path).parent
+
+        # Scan the directory that contains the piper executable
+        for onnx_file in sorted(piper_dir.glob("*.onnx")):
+            voices.append(onnx_file.stem)
+
+        # Also check a piper_models/ subdirectory as a secondary location
+        models_dir = piper_dir / "piper_models"
+        if models_dir.exists():
+            for onnx_file in sorted(models_dir.glob("*.onnx")):
+                voices.append(onnx_file.stem)
+
+        # Fall back to a sensible default when no models are found on disk
+        return voices if voices else ["en_US-lessac-medium"]

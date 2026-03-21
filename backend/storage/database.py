@@ -95,9 +95,101 @@ class Database:
                     height INTEGER
                 )
             """)
-            
+
+            # Personas table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS personas (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    system_prompt TEXT NOT NULL,
+                    default_model TEXT,
+                    icon TEXT DEFAULT '🤖',
+                    is_builtin INTEGER DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Uploads table
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS uploads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    upload_id TEXT NOT NULL UNIQUE,
+                    session_id TEXT,
+                    original_filename TEXT NOT NULL,
+                    stored_path TEXT NOT NULL,
+                    file_size INTEGER,
+                    mime_type TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Index for uploads by session
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_uploads_session_id
+                ON uploads(session_id)
+            """)
+
             await db.commit()
-    
+
+    async def save_upload(
+        self,
+        upload_id: str,
+        session_id: Optional[str],
+        original_filename: str,
+        stored_path: str,
+        file_size: Optional[int],
+        mime_type: Optional[str],
+    ) -> int:
+        """
+        Save upload metadata to the database.
+
+        Returns:
+            Record ID
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO uploads (upload_id, session_id, original_filename, stored_path, file_size, mime_type)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (upload_id, session_id, original_filename, stored_path, file_size, mime_type),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def get_session_uploads(self, session_id: str) -> List[Dict[str, Any]]:
+        """Return all uploads for a given session."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT upload_id, session_id, original_filename, stored_path, file_size, mime_type, created_at
+                FROM uploads
+                WHERE session_id = ?
+                ORDER BY created_at ASC
+                """,
+                (session_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(row) for row in rows]
+
+    async def get_upload(self, upload_id: str) -> Optional[Dict[str, Any]]:
+        """Return a single upload record by upload_id, or None."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT upload_id, session_id, original_filename, stored_path, file_size, mime_type, created_at
+                FROM uploads
+                WHERE upload_id = ?
+                """,
+                (upload_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row is None:
+                    return None
+                return dict(row)
+
     async def save_message(
         self,
         session_id: str,
@@ -211,6 +303,40 @@ class Database:
                 
                 return sessions
     
+    async def update_session_title(self, session_id: str, title: str) -> None:
+        """
+        Update the title of a session.
+
+        Args:
+            session_id: Session identifier
+            title: New title string
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            await db.execute(
+                "UPDATE sessions SET title = ? WHERE session_id = ?",
+                (title, session_id),
+            )
+            await db.commit()
+
+    async def is_first_message(self, session_id: str) -> bool:
+        """
+        Return True if there is exactly one message saved for this session.
+
+        Use this *after* saving the first user message to decide whether to
+        generate an auto-title.
+
+        Args:
+            session_id: Session identifier
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            async with db.execute(
+                "SELECT COUNT(*) FROM conversations WHERE session_id = ?",
+                (session_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                count = row[0] if row else 0
+                return count == 1
+
     async def delete_session(self, session_id: str) -> None:
         """
         Delete a conversation session.
@@ -311,13 +437,150 @@ class Database:
             await db.commit()
             return cursor.lastrowid
     
+    async def get_images_paginated(
+        self,
+        page: int = 1,
+        per_page: int = 24,
+        prompt_filter: Optional[str] = None,
+        model_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Return a paginated, optionally filtered list of generated images.
+
+        Args:
+            page: 1-based page number
+            per_page: records per page
+            prompt_filter: optional substring to match against prompt
+            model_filter: optional substring to match against model_name
+
+        Returns:
+            Dict with keys: images, total, page, per_page
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+
+            conditions: List[str] = []
+            params: List[Any] = []
+
+            if prompt_filter:
+                conditions.append("prompt LIKE ?")
+                params.append(f"%{prompt_filter}%")
+            if model_filter:
+                conditions.append("model_name LIKE ?")
+                params.append(f"%{model_filter}%")
+
+            where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+            count_query = f"SELECT COUNT(*) FROM generated_images {where_clause}"
+            async with db.execute(count_query, params) as cursor:
+                row = await cursor.fetchone()
+                total: int = row[0] if row else 0
+
+            offset = (page - 1) * per_page
+            data_query = f"""
+                SELECT id, filename, filepath, prompt, negative_prompt,
+                       model_name, lora_used, parameters, created_at,
+                       file_size, width, height
+                FROM generated_images
+                {where_clause}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            """
+            async with db.execute(data_query, params + [per_page, offset]) as cursor:
+                rows = await cursor.fetchall()
+
+                images = []
+                for row in rows:
+                    img = {
+                        "id": row["id"],
+                        "filename": row["filename"],
+                        "filepath": row["filepath"],
+                        "prompt": row["prompt"],
+                        "negative_prompt": row["negative_prompt"],
+                        "model_name": row["model_name"],
+                        "lora_used": json.loads(row["lora_used"]) if row["lora_used"] else None,
+                        "parameters": json.loads(row["parameters"]),
+                        "created_at": row["created_at"],
+                        "file_size": row["file_size"],
+                        "width": row["width"],
+                        "height": row["height"],
+                    }
+                    images.append(img)
+
+            return {"images": images, "total": total, "page": page, "per_page": per_page}
+
+    async def get_image(self, image_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Return a single image record by ID.
+
+        Args:
+            image_id: primary key of the generated_images row
+
+        Returns:
+            Image metadata dict, or None if not found
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                """
+                SELECT id, filename, filepath, prompt, negative_prompt,
+                       model_name, lora_used, parameters, created_at,
+                       file_size, width, height
+                FROM generated_images
+                WHERE id = ?
+                """,
+                (image_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row is None:
+                    return None
+                return {
+                    "id": row["id"],
+                    "filename": row["filename"],
+                    "filepath": row["filepath"],
+                    "prompt": row["prompt"],
+                    "negative_prompt": row["negative_prompt"],
+                    "model_name": row["model_name"],
+                    "lora_used": json.loads(row["lora_used"]) if row["lora_used"] else None,
+                    "parameters": json.loads(row["parameters"]),
+                    "created_at": row["created_at"],
+                    "file_size": row["file_size"],
+                    "width": row["width"],
+                    "height": row["height"],
+                }
+
+    async def delete_image(self, image_id: int) -> Optional[str]:
+        """
+        Delete an image record and return its filepath so the caller can
+        remove the file from disk.
+
+        Args:
+            image_id: primary key of the generated_images row
+
+        Returns:
+            filepath string if the record existed, else None
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT filepath FROM generated_images WHERE id = ?",
+                (image_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+            if row is None:
+                return None
+            filepath = row["filepath"]
+            await db.execute("DELETE FROM generated_images WHERE id = ?", (image_id,))
+            await db.commit()
+            return filepath
+
     async def list_images(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         List generated images.
-        
+
         Args:
             limit: Optional limit on number of images
-            
+
         Returns:
             List of image metadata dictionaries
         """
@@ -357,6 +620,164 @@ class Database:
                     images.append(img)
                 
                 return images
+
+
+    # ── Persona CRUD ──────────────────────────────────────────────────────
+
+    BUILTIN_PERSONAS = [
+        {
+            "name": "General Assistant",
+            "icon": "🤖",
+            "system_prompt": "You are a helpful, accurate, and concise assistant.",
+            "is_builtin": 1,
+        },
+        {
+            "name": "Code Assistant",
+            "icon": "💻",
+            "system_prompt": (
+                "You are an expert programmer. Provide clean, well-commented code. "
+                "Prefer explaining the 'why' alongside the 'what'."
+            ),
+            "is_builtin": 1,
+        },
+        {
+            "name": "Creative Writer",
+            "icon": "✍️",
+            "system_prompt": (
+                "You are a creative writing assistant with a vivid imagination. "
+                "Help craft engaging stories, dialogue, and prose."
+            ),
+            "is_builtin": 1,
+        },
+        {
+            "name": "Data Analyst",
+            "icon": "📊",
+            "system_prompt": (
+                "You are a data analysis expert. Help interpret data, write queries, "
+                "suggest visualizations, and explain statistical concepts clearly."
+            ),
+            "is_builtin": 1,
+        },
+        {
+            "name": "SQL Expert",
+            "icon": "🗄️",
+            "system_prompt": (
+                "You specialize in SQL. Write efficient queries, explain execution "
+                "plans, and help with schema design."
+            ),
+            "is_builtin": 1,
+        },
+    ]
+
+    async def seed_builtin_personas(self) -> None:
+        """Insert built-in personas if the table is empty."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            async with db.execute("SELECT COUNT(*) FROM personas WHERE is_builtin = 1") as cursor:
+                row = await cursor.fetchone()
+                count = row[0] if row else 0
+
+            if count == 0:
+                for p in self.BUILTIN_PERSONAS:
+                    await db.execute(
+                        """
+                        INSERT OR IGNORE INTO personas (name, system_prompt, icon, is_builtin)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (p["name"], p["system_prompt"], p["icon"], p["is_builtin"]),
+                    )
+                await db.commit()
+
+    async def list_personas(self) -> List[Dict[str, Any]]:
+        """Return all personas as a list of dicts."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT id, name, system_prompt, default_model, icon, is_builtin, created_at "
+                "FROM personas ORDER BY is_builtin DESC, id ASC"
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [
+                    {
+                        "id": row["id"],
+                        "name": row["name"],
+                        "system_prompt": row["system_prompt"],
+                        "default_model": row["default_model"],
+                        "icon": row["icon"],
+                        "is_builtin": bool(row["is_builtin"]),
+                        "created_at": row["created_at"],
+                    }
+                    for row in rows
+                ]
+
+    async def create_persona(
+        self,
+        name: str,
+        system_prompt: str,
+        icon: str = "🤖",
+        default_model: Optional[str] = None,
+    ) -> int:
+        """Insert a new custom persona and return its id."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            cursor = await db.execute(
+                """
+                INSERT INTO personas (name, system_prompt, icon, default_model, is_builtin)
+                VALUES (?, ?, ?, ?, 0)
+                """,
+                (name, system_prompt, icon, default_model),
+            )
+            await db.commit()
+            return cursor.lastrowid
+
+    async def update_persona(
+        self,
+        persona_id: int,
+        name: Optional[str] = None,
+        system_prompt: Optional[str] = None,
+        icon: Optional[str] = None,
+        default_model: Optional[str] = None,
+    ) -> None:
+        """Update fields on a persona (only non-None values are applied)."""
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            fields: List[str] = []
+            params: List[Any] = []
+            if name is not None:
+                fields.append("name = ?")
+                params.append(name)
+            if system_prompt is not None:
+                fields.append("system_prompt = ?")
+                params.append(system_prompt)
+            if icon is not None:
+                fields.append("icon = ?")
+                params.append(icon)
+            if default_model is not None:
+                fields.append("default_model = ?")
+                params.append(default_model)
+            if not fields:
+                return
+            params.append(persona_id)
+            await db.execute(
+                f"UPDATE personas SET {', '.join(fields)} WHERE id = ?",
+                params,
+            )
+            await db.commit()
+
+    async def delete_persona(self, persona_id: int) -> bool:
+        """
+        Delete a persona if it is not a built-in.
+
+        Returns True if deleted, False if the persona is built-in or not found.
+        """
+        async with aiosqlite.connect(str(self.db_path)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT is_builtin FROM personas WHERE id = ?", (persona_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+            if row is None or row["is_builtin"]:
+                return False
+            await db.execute("DELETE FROM personas WHERE id = ?", (persona_id,))
+            await db.commit()
+            return True
 
 
 # Global database instance
