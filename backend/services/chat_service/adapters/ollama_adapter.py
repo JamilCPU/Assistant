@@ -143,12 +143,6 @@ class OllamaAdapter(ChatService):
                     content = message.get("content", "")
                     tool_calls_raw = message.get("tool_calls", [])
 
-                    # #region agent log
-                    import json as _json
-                    if content or tool_calls_raw:
-                        print(f"[AGENT_LOG] ollama_adapter chunk | has_content={bool(content)} | content_preview={repr(content[:80])} | has_tool_calls={bool(tool_calls_raw)} | tool_calls={str(tool_calls_raw)[:200]} | done={chunk.get('done',False)}", flush=True)
-                    # #endregion
-
                     if content:
                         yield {"type": "token", "content": content}
 
