@@ -22,7 +22,13 @@ export default function Sidebar() {
     );
   });
 
-  const setMode = (mode: AppMode) => dispatch({ type: 'SET_MODE', mode });
+  const setMode = (mode: AppMode) => {
+    dispatch({ type: 'SET_MODE', mode });
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 768) {
+      dispatch({ type: 'SET_SIDEBAR', open: false });
+    }
+  };
 
   const startEdit = (sessionId: string, currentTitle: string | null | undefined) => {
     setEditingId(sessionId);

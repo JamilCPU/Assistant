@@ -1,0 +1,1 @@
+-- Placeholder migration (no schema changes required)

@@ -1,0 +1,1 @@
+On the Image Generation tab, teh checkpoint column indicates that no models are actually being found. That's problematic. We should go in and ensure our two image models actually exist

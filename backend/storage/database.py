@@ -219,12 +219,13 @@ class Database:
             
             await db.commit()
             
-            # Update session last_activity
+            # Update session last_activity (preserve created_at and title)
             await db.execute("""
-                INSERT OR REPLACE INTO sessions (session_id, last_activity, title)
-                VALUES (?, CURRENT_TIMESTAMP, 
-                    COALESCE((SELECT title FROM sessions WHERE session_id = ?), NULL))
-            """, (session_id, session_id))
+                INSERT INTO sessions (session_id, created_at, last_activity, title)
+                VALUES (?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    last_activity = CURRENT_TIMESTAMP
+            """, (session_id,))
             
             await db.commit()
             

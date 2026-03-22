@@ -68,7 +68,7 @@ function DetailModal({ image, onClose, onDelete, onUseAsTemplate }: DetailModalP
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {image.model_name && <MetaCell label="Model" value={image.model_name} />}
-              {params.sampler && <MetaCell label="Sampler" value={String(params.sampler)} />}
+              {!!params.sampler && <MetaCell label="Sampler" value={String(params.sampler)} />}
               {params.steps !== undefined && <MetaCell label="Steps" value={String(params.steps)} />}
               {params.cfg_scale !== undefined && <MetaCell label="CFG" value={String(params.cfg_scale)} />}
               {params.seed !== undefined && <MetaCell label="Seed" value={String(params.seed)} />}
@@ -328,8 +328,8 @@ export default function GalleryView() {
   return (
     <div className="flex-1 overflow-hidden flex flex-col">
       {/* Top bar */}
-      <div className="shrink-0 px-5 py-4 border-b border-border flex flex-wrap items-center gap-3">
-        <h2 className="text-base font-semibold text-text-primary mr-2">Gallery</h2>
+      <div className="shrink-0 px-3 sm:px-5 py-3 sm:py-4 border-b border-border flex flex-wrap items-center gap-2 sm:gap-3">
+        <h2 className="text-base font-semibold text-text-primary mr-1 sm:mr-2">Gallery</h2>
 
         {/* Prompt search */}
         <input
@@ -337,7 +337,7 @@ export default function GalleryView() {
           value={promptFilter}
           onChange={(e) => setPromptFilter(e.target.value)}
           placeholder="Search by prompt…"
-          className="flex-1 min-w-[160px] bg-input-bg text-text-primary border border-border rounded-xl px-3 py-1.5 text-sm outline-none focus:border-border-light transition-colors placeholder:text-text-muted"
+          className="flex-1 min-w-[120px] sm:min-w-[160px] bg-input-bg text-text-primary border border-border rounded-xl px-3 py-1.5 text-sm outline-none focus:border-border-light transition-colors placeholder:text-text-muted"
         />
 
         {/* Model filter */}
@@ -346,7 +346,7 @@ export default function GalleryView() {
           value={modelFilter}
           onChange={(e) => setModelFilter(e.target.value)}
           placeholder="Filter by model…"
-          className="w-[160px] bg-input-bg text-text-primary border border-border rounded-xl px-3 py-1.5 text-sm outline-none focus:border-border-light transition-colors placeholder:text-text-muted"
+          className="w-full sm:w-[160px] bg-input-bg text-text-primary border border-border rounded-xl px-3 py-1.5 text-sm outline-none focus:border-border-light transition-colors placeholder:text-text-muted"
         />
 
         {/* Sort toggle */}
@@ -366,7 +366,7 @@ export default function GalleryView() {
       </div>
 
       {/* Grid */}
-      <div className="flex-1 overflow-y-auto px-5 py-5">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-5 py-3 sm:py-5">
         {initialLoading ? (
           <div className="flex items-center justify-center py-24">
             <div className="w-8 h-8 border-2 border-border border-t-accent rounded-full animate-spin" />

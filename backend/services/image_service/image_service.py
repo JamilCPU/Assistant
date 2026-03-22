@@ -102,3 +102,9 @@ class ImageServiceManager:
             raise RuntimeError("Image service adapter not initialized")
 
         return await self.adapter.list_styles()
+
+    async def refresh_checkpoints(self) -> bool:
+        """Trigger a checkpoint rescan in Automatic1111."""
+        if not self.adapter:
+            return False
+        return await self.adapter.refresh_checkpoints()

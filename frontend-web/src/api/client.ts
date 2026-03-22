@@ -404,6 +404,13 @@ export function ollamaPull(
   return controller;
 }
 
+export async function refreshCheckpoints(): Promise<void> {
+  await fetch('/api/auto1111/refresh-checkpoints', {
+    method: 'POST',
+    headers: buildHeaders(),
+  });
+}
+
 // ── Public API – images ───────────────────────────────────────────────────
 
 export function listImagesPaginated(

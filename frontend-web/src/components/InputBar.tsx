@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, type KeyboardEvent, type DragEvent } from 'react';
+import { useState, useRef, useCallback, type KeyboardEvent, type DragEvent } from 'react';
 import * as api from '../api/client';
 import { useChat } from '../context/ChatContext';
 
@@ -112,7 +112,7 @@ export default function InputBar({ onSend, disabled = false, placeholder = 'Ask 
 
   return (
     <div
-      className={`w-full flex justify-center px-4 pb-4 pt-2 ${dragOver ? 'bg-accent/5' : ''}`}
+      className={`w-full flex justify-center px-2 sm:px-4 pb-3 sm:pb-4 pt-2 ${dragOver ? 'bg-accent/5' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
