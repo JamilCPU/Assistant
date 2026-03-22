@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { Message } from '../context/ChatContext';
 
 function formatBytes(bytes: number): string {
@@ -14,6 +14,66 @@ interface MessageBubbleProps {
 interface ToolPayload {
   name: string;
   arguments: Record<string, unknown>;
+}
+
+function AudioPlayer({ src }: { src: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [current, setCurrent] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onTime = () => setCurrent(el.currentTime);
+    const onLoaded = () => setDuration(el.duration);
+    const onEnded = () => setPlaying(false);
+    el.addEventListener('timeupdate', onTime);
+    el.addEventListener('loadedmetadata', onLoaded);
+    el.addEventListener('ended', onEnded);
+    return () => {
+      el.removeEventListener('timeupdate', onTime);
+      el.removeEventListener('loadedmetadata', onLoaded);
+      el.removeEventListener('ended', onEnded);
+    };
+  }, []);
+
+  const toggle = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (playing) { el.pause(); setPlaying(false); }
+    else { el.play(); setPlaying(true); }
+  };
+
+  const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.currentTime = Number(e.target.value);
+    setCurrent(el.currentTime);
+  };
+
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  return (
+    <div className="mt-2 flex items-center gap-2 bg-black/20 rounded-lg px-3 py-1.5 max-w-xs">
+      <audio ref={audioRef} src={src} preload="metadata" />
+      <button onClick={toggle} className="text-text-secondary hover:text-text-primary transition-colors text-xs w-5 shrink-0">
+        {playing ? '⏸' : '▶'}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={duration || 1}
+        step={0.1}
+        value={current}
+        onChange={seek}
+        className="flex-1 h-1 accent-text-secondary cursor-pointer"
+      />
+      <span className="text-xs text-text-muted shrink-0 tabular-nums">
+        {fmt(current)} / {fmt(duration)}
+      </span>
+    </div>
+  );
 }
 
 export default function MessageBubble({ message }: MessageBubbleProps) {
@@ -100,13 +160,7 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
             <span className="inline-block w-[2px] h-[1em] bg-text-primary ml-0.5 animate-pulse align-middle" />
           )}
         </p>
-        {audioUrl && !streaming && (
-          <audio
-            controls
-            src={audioUrl}
-            className="w-full max-w-xs h-8 mt-2 opacity-80"
-          />
-        )}
+        {audioUrl && !streaming && <AudioPlayer src={audioUrl} />}
       </div>
     </div>
   );
