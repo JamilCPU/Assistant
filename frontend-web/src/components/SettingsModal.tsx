@@ -140,6 +140,8 @@ export default function SettingsModal({ onClose }: Props) {
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
         className="relative w-full max-w-2xl max-h-[90vh] bg-sidebar-bg border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >

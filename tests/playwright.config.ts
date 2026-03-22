@@ -25,11 +25,11 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: 'uvicorn backend.gateway.main:app --port 8000',
+      command: '.venv\\Scripts\\python.exe -m uvicorn backend.gateway.main:app --port 8000',
       cwd: '..',
       url: 'http://localhost:8000/health',
       reuseExistingServer: true,
-      timeout: 30_000,
+      timeout: 45_000,
     },
   ],
 });

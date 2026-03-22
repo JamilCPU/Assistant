@@ -31,8 +31,8 @@ function AppLayout() {
           md:relative md:z-auto md:w-auto md:inset-auto md:translate-x-0
           md:shrink-0 md:overflow-hidden md:transition-all
           ${state.sidebarOpen
-            ? 'translate-x-0 md:w-[260px]'
-            : '-translate-x-full md:w-0'
+            ? 'translate-x-0 md:w-[260px] md:visible'
+            : '-translate-x-full md:w-0 md:invisible'
           }
         `}
       >
