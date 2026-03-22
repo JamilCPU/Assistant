@@ -55,4 +55,3 @@ tests/playwright-report/
 tests/test-results/
 tests/test-results.json
 tests/plan.json
-tests/specs/

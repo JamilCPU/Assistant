@@ -10,7 +10,7 @@ export default function TopBar() {
         <button
           onClick={() => dispatch({ type: 'SET_SIDEBAR', open: true })}
           className="md:hidden mr-2 w-[30px] h-[30px] flex items-center justify-center rounded-md text-text-secondary hover:bg-button-hover hover:text-text-primary transition-colors cursor-pointer shrink-0"
-          title="Open sidebar"
+          title="Open navigation"
         >
           <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path d="M4 6h16M4 12h16M4 18h16" />

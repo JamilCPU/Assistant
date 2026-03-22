@@ -5,8 +5,8 @@
   },
   "models": {
     "chat": {
-      "default": "llama3",
-      "ollama_url": "http://host.docker.internal:11434/"
+      "default": "llama3.1:8b",
+      "ollama_url": "http://localhost:11434"
     },
     "image": {
       "default": "stable-diffusion-xl",
