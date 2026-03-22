@@ -81,7 +81,7 @@ interface SelectProps {
 function Select({ label, value, onChange, options, placeholder, disabled }: SelectProps) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-semibold text-text-secondary tracking-wide">{label}</label>
+      {label && <label className="text-xs font-semibold text-text-secondary tracking-wide">{label}</label>}
       <select
         value={value}
         disabled={disabled}
@@ -190,6 +190,9 @@ export default function ImageView() {
   const [loraDropdownOpen, setLoraDropdownOpen] = useState(false);
   const loraRef = useRef<HTMLDivElement>(null);
 
+  // ── Refresh checkpoints state ────────────────────────────────────────
+  const [refreshingCheckpoints, setRefreshingCheckpoints] = useState(false);
+
   // ── Output state ─────────────────────────────────────────────────────
   const [generating, setGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -235,6 +238,20 @@ export default function ImageView() {
 
   useEffect(() => {
     fetchOptions();
+  }, [fetchOptions]);
+
+  // ── Refresh checkpoints handler ───────────────────────────────────────
+
+  const handleRefreshCheckpoints = useCallback(async () => {
+    setRefreshingCheckpoints(true);
+    try {
+      await api.refreshCheckpoints();
+      await fetchOptions();
+    } catch {
+      // ignore errors
+    } finally {
+      setRefreshingCheckpoints(false);
+    }
   }, [fetchOptions]);
 
   // ── Apply image template from gallery ────────────────────────────────
@@ -508,8 +525,8 @@ export default function ImageView() {
       <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
 
         {/* ── Left: Controls ─────────────────────────────────────────── */}
-        <div className="lg:w-[40%] overflow-y-auto border-r border-border flex-shrink-0">
-          <div className="px-5 py-5 flex flex-col gap-4">
+        <div className="lg:w-[40%] overflow-y-auto border-b lg:border-b-0 lg:border-r border-border flex-shrink-0">
+          <div className="px-3 sm:px-5 py-4 sm:py-5 flex flex-col gap-4">
 
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -538,14 +555,35 @@ export default function ImageView() {
             </div>
 
             {/* Checkpoint */}
-            <Select
-              label="Checkpoint"
-              value={model}
-              onChange={setModel}
-              options={imageModels}
-              placeholder={imageModels.length === 0 ? 'No models found' : undefined}
-              disabled={generating}
-            />
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-text-secondary tracking-wide">Checkpoint</label>
+                <button
+                  onClick={handleRefreshCheckpoints}
+                  disabled={generating || refreshingCheckpoints}
+                  title="Refresh checkpoints"
+                  className="text-xs text-accent hover:text-accent/80 disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  {refreshingCheckpoints ? (
+                    <span className="w-3 h-3 border border-accent/30 border-t-accent rounded-full animate-spin inline-block" />
+                  ) : '↻'} Refresh
+                </button>
+              </div>
+              {imageModels.length === 0 && !loadingOptions ? (
+                <div className="rounded-xl border border-border bg-input-bg px-3 py-3 text-xs text-text-muted">
+                  No checkpoints found. Make sure Automatic1111 is running and has model files in its models directory. Click Refresh to scan.
+                </div>
+              ) : (
+                <Select
+                  label=""
+                  value={model}
+                  onChange={setModel}
+                  options={imageModels}
+                  placeholder={imageModels.length === 0 ? 'No models found' : undefined}
+                  disabled={generating}
+                />
+              )}
+            </div>
 
             {/* Input image (img2img / inpaint) */}
             {(genMode === 'img2img' || genMode === 'inpaint') && (
@@ -1051,7 +1089,7 @@ export default function ImageView() {
 
         {/* ── Right: Output ───────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto">
-          <div className="px-5 py-5 flex flex-col gap-4">
+          <div className="px-3 sm:px-5 py-4 sm:py-5 flex flex-col gap-4">
 
             {/* Error */}
             {error && (

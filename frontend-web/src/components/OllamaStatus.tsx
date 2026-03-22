@@ -9,11 +9,11 @@ export default function OllamaStatus() {
   const modelCount = state.ollamaModelCount;
 
   return (
-    <div className="fixed bottom-4 left-4 z-50">
+    <div className="fixed bottom-3 sm:bottom-4 left-2 sm:left-4 z-50">
       {/* Status dot button */}
       <button
         onClick={() => setShowPopover((p) => !p)}
-        className="group relative flex items-center gap-2 rounded-full bg-sidebar-bg border border-border px-3 py-1.5 shadow-lg hover:bg-button-hover transition-colors cursor-pointer"
+        className="group relative flex items-center gap-1.5 sm:gap-2 rounded-full bg-sidebar-bg border border-border px-2 sm:px-3 py-1 sm:py-1.5 shadow-lg hover:bg-button-hover transition-colors cursor-pointer"
         title={online ? `Ollama · ${modelCount} model${modelCount !== 1 ? 's' : ''}` : 'Ollama · Offline'}
       >
         {/* Dot */}
@@ -22,7 +22,7 @@ export default function OllamaStatus() {
             online ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]' : 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]'
           }`}
         />
-        <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
+        <span className="hidden sm:inline text-xs text-text-secondary group-hover:text-text-primary transition-colors">
           Ollama
         </span>
       </button>

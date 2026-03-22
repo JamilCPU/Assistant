@@ -195,6 +195,12 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
                 "event": "error",
                 "data": json.dumps({"error": str(e)}),
             }
+            # Still attempt to save whatever was generated before the error
+            if full_text and full_text.strip():
+                try:
+                    await _db.save_message(session_id, "assistant", full_text)
+                except Exception:
+                    pass
             return
 
         # ── Post-stream processing ────────────────────────────────────
@@ -270,8 +276,9 @@ async def chat_stream(request: ChatRequest, api_key: str = Depends(verify_api_ke
             # Persist the follow-up assistant message
             await _db.save_message(session_id, "assistant", follow_up_text)
         else:
-            # No tool calls — persist the assistant response directly
-            await _db.save_message(session_id, "assistant", full_text)
+            # No tool calls — persist the assistant response directly (skip empty)
+            if full_text.strip():
+                await _db.save_message(session_id, "assistant", full_text)
 
         # ── Auto-title (fire and forget) ──────────────────────────────
         if is_first:

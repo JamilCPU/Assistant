@@ -13,13 +13,30 @@ function AppLayout() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-main-bg text-text-primary font-sans">
-      {/* Sidebar */}
+
+      {/* Mobile overlay backdrop — visible only on small screens when sidebar is open */}
+      {state.sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => dispatch({ type: 'SET_SIDEBAR', open: false })}
+        />
+      )}
+
+      {/* Sidebar — overlay on mobile, push on desktop */}
+      {/* Mobile: absolute overlay drawer (z-50, w-[280px]) */}
+      {/* Desktop (md+): shrink-0 push layout (w-[260px] or w-0) */}
       <div
-        className={`shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
-          state.sidebarOpen ? 'w-[260px]' : 'w-0'
-        }`}
+        className={`
+          fixed inset-y-0 left-0 z-50 w-[280px] transition-transform duration-300 ease-in-out
+          md:relative md:z-auto md:w-auto md:inset-auto md:translate-x-0
+          md:shrink-0 md:overflow-hidden md:transition-all
+          ${state.sidebarOpen
+            ? 'translate-x-0 md:w-[260px]'
+            : '-translate-x-full md:w-0'
+          }
+        `}
       >
-        <div className="w-[260px] h-full">
+        <div className="w-[280px] md:w-[260px] h-full">
           <Sidebar />
         </div>
       </div>
@@ -29,11 +46,11 @@ function AppLayout() {
         {/* Top bar — only show for chat mode */}
         {state.mode === 'chat' && <TopBar />}
 
-        {/* Collapsed-sidebar toggle (visible when sidebar is hidden) */}
+        {/* Collapsed-sidebar toggle (visible when sidebar is hidden, on desktop only — mobile uses TopBar hamburger) */}
         {!state.sidebarOpen && (
           <button
             onClick={() => dispatch({ type: 'SET_SIDEBAR', open: true })}
-            className="absolute top-3 left-3 z-10 w-[30px] h-[30px] flex items-center justify-center rounded-md text-text-secondary hover:bg-button-hover hover:text-text-primary transition-colors cursor-pointer"
+            className="hidden md:flex absolute top-3 left-3 z-10 w-[30px] h-[30px] items-center justify-center rounded-md text-text-secondary hover:bg-button-hover hover:text-text-primary transition-colors cursor-pointer"
             title="Open sidebar"
           >
             <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

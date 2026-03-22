@@ -467,3 +467,20 @@ class Auto1111Adapter(ImageService):
             return [s.get("name", "") for s in data if s.get("name")]
         except Exception:
             return []
+
+    async def refresh_checkpoints(self) -> bool:
+        """
+        Tell Automatic1111 to rescan its models directory for new checkpoints.
+
+        Returns:
+            True if the refresh succeeded, False otherwise.
+        """
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/sdapi/v1/refresh-checkpoints",
+                json={},
+                timeout=30.0,
+            )
+            return response.status_code == 200
+        except Exception:
+            return False

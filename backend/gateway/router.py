@@ -204,6 +204,15 @@ async def auto1111_upscalers(api_key: str = Depends(verify_api_key)) -> dict:
         raise HTTPException(status_code=500, detail=f"Error listing upscalers: {str(e)}")
 
 
+@router.post("/api/auto1111/refresh-checkpoints")
+async def auto1111_refresh_checkpoints(api_key: str = Depends(verify_api_key)) -> dict:
+    """Tell Automatic1111 to rescan its models directory for new checkpoints."""
+    success = await image_service.refresh_checkpoints()
+    if not success:
+        raise HTTPException(status_code=502, detail="Failed to refresh checkpoints — is Automatic1111 running?")
+    return {"refreshed": True}
+
+
 @router.get("/api/auto1111/styles")
 async def auto1111_styles(api_key: str = Depends(verify_api_key)) -> dict:
     """List available prompt styles from Automatic1111."""

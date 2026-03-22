@@ -1,0 +1,1 @@
+Place your Stable Diffusion model files (.safetensors) here. They will be mounted into the Automatic1111 container automatically. Download models from CivitAI or HuggingFace. Recommended: juggernautXL_v9.safetensors, sd_xl_base_1.0.safetensors

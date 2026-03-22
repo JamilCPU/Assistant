@@ -313,12 +313,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'SET_LOADING', loading: true });
     try {
       const data = await api.getConversation(sessionId);
-      const msgs: Message[] = data.messages.map((m) => ({
-        id: nextMsgId++,
-        role: m.role as Message['role'],
-        content: m.content,
-        timestamp: m.timestamp,
-      }));
+      const msgs: Message[] = data.messages
+        .filter((m) => m.content && m.content.trim().length > 0)
+        .map((m) => ({
+          id: nextMsgId++,
+          role: m.role as Message['role'],
+          content: m.content,
+          timestamp: m.timestamp,
+        }));
       dispatch({ type: 'SET_SESSION', sessionId });
       dispatch({ type: 'SET_MESSAGES', messages: msgs });
       dispatch({ type: 'SET_MODE', mode: 'chat' });
@@ -395,12 +397,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               dispatch({ type: 'SET_AUDIO_URL', msgId: assistantMsgId, audioUrl: info.audio_url });
             }
 
-            if (!state.sessionId && info.session_id) {
+            const isNewSession = !state.sessionId && !!info.session_id;
+            if (isNewSession) {
               dispatch({ type: 'SET_SESSION', sessionId: info.session_id });
             }
 
             // Refresh sidebar sessions after a new message
             refreshSessions();
+
+            // For new sessions, the auto-title is generated async on the backend (~1-2s).
+            // Re-fetch sessions again after a short delay to pick up the generated title.
+            if (isNewSession) {
+              setTimeout(() => refreshSessions(), 2500);
+            }
+
             streamControllerRef.current = null;
           },
           onError(error) {

@@ -10,6 +10,11 @@ services:
       - sqlite_data:/app/backend/storage/data
       # Mount config so you can edit settings without rebuilding
       - ./config:/app/config
+    environment:
+      - AUTO1111_URL=http://stable-diffusion:7860
+      - OLLAMA_URL=http://host.docker.internal:11434
+    depends_on:
+      - stable-diffusion
     networks:
       - assistant_net
     restart: unless-stopped
@@ -26,8 +31,29 @@ services:
       - assistant_net
     restart: unless-stopped
 
+  stable-diffusion:
+    image: universalml/automatic1111:latest
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./models/stable-diffusion:/app/stable-diffusion-webui/models/Stable-diffusion
+      - sd_outputs:/app/stable-diffusion-webui/outputs
+    environment:
+      - COMMANDLINE_ARGS=--api --listen --no-half-vae
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - assistant_net
+    restart: unless-stopped
+
 volumes:
   sqlite_data:
+  sd_outputs:
 
 networks:
   assistant_net:

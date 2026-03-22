@@ -55,7 +55,7 @@ function AudioPlayer({ src }: { src: string }) {
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
   return (
-    <div className="mt-2 flex items-center gap-2 bg-black/20 rounded-lg px-3 py-1.5 max-w-xs">
+    <div className="mt-2 flex items-center gap-2 bg-black/20 rounded-lg px-3 py-1.5 w-full max-w-xs sm:max-w-xs">
       <audio ref={audioRef} src={src} preload="metadata" />
       <button onClick={toggle} className="text-text-secondary hover:text-text-primary transition-colors text-xs w-5 shrink-0">
         {playing ? '⏸' : '▶'}

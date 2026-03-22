@@ -4,13 +4,26 @@ export default function TopBar() {
   const { state, dispatch } = useChat();
 
   return (
-    <div className="flex items-center h-[52px] px-4 bg-main-bg shrink-0">
+    <div className="flex items-center min-h-[52px] px-4 bg-main-bg shrink-0 flex-wrap gap-y-1 py-1">
+      {/* Hamburger — always visible on mobile when sidebar is closed */}
+      {!state.sidebarOpen && (
+        <button
+          onClick={() => dispatch({ type: 'SET_SIDEBAR', open: true })}
+          className="md:hidden mr-2 w-[30px] h-[30px] flex items-center justify-center rounded-md text-text-secondary hover:bg-button-hover hover:text-text-primary transition-colors cursor-pointer shrink-0"
+          title="Open sidebar"
+        >
+          <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
+
       {/* Model selector */}
       <div className="relative">
         <select
           value={state.selectedModel ?? ''}
           onChange={(e) => dispatch({ type: 'SELECT_MODEL', model: e.target.value })}
-          className="appearance-none bg-transparent text-text-primary text-sm font-semibold border-none rounded-md px-2 py-1.5 pr-7 hover:bg-button-hover cursor-pointer outline-none"
+          className="appearance-none bg-transparent text-text-primary text-sm font-semibold border-none rounded-md px-2 py-1.5 pr-7 hover:bg-button-hover cursor-pointer outline-none max-w-[140px] sm:max-w-none truncate"
         >
           {state.chatModels.length === 0 && (
             <option value="">No models</option>
@@ -32,7 +45,7 @@ export default function TopBar() {
       <div className="flex-1" />
 
       {/* TTS toggle + voice selector */}
-      <div className="flex items-center gap-2 mr-3">
+      <div className="flex items-center gap-2 mr-2 sm:mr-3">
         <label className="flex items-center gap-1.5 text-text-secondary text-xs cursor-pointer hover:text-text-primary transition-colors">
           <input
             type="checkbox"
@@ -40,11 +53,11 @@ export default function TopBar() {
             onChange={() => dispatch({ type: 'TOGGLE_TTS' })}
             className="w-3.5 h-3.5 rounded accent-accent"
           />
-          🔊 TTS
+          🔊 <span className="hidden sm:inline">TTS</span>
         </label>
 
         {state.ttsEnabled && state.ttsVoices.length > 0 && (
-          <div className="relative">
+          <div className="relative hidden sm:block">
             <select
               value={state.ttsVoice ?? ''}
               onChange={(e) =>

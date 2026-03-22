@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import os
 from contextlib import asynccontextmanager
 
 from pathlib import Path
@@ -14,6 +15,7 @@ from backend.gateway.ollama_router import ollama_router
 from backend.gateway.settings_router import settings_router
 from backend.storage.config import get_config
 from backend.storage.database import get_database
+from backend.storage.migrate import run_migrations
 
 # Ensure the images directory exists before mounting
 _images_dir = Path("./backend/storage/data/images")
@@ -27,9 +29,20 @@ _audio_dir.mkdir(parents=True, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
+    # Allow environment variables to override config-file URLs so that
+    # Docker deployments can point services at containerised endpoints.
+    _cfg_startup = get_config()
+    _auto1111_url = os.environ.get("AUTO1111_URL")
+    if _auto1111_url:
+        _cfg_startup.set("models.image.auto1111_url", _auto1111_url)
+    _ollama_url = os.environ.get("OLLAMA_URL")
+    if _ollama_url:
+        _cfg_startup.set("models.chat.ollama_url", _ollama_url)
+
     # Startup
     print("Initializing database...")
     db = get_database()
+    await run_migrations(str(db.db_path))
     await db.initialize()
     await db.seed_builtin_personas()
     print("Database initialized.")

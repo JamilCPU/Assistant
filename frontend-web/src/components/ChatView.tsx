@@ -77,7 +77,7 @@ export default function ChatView() {
             </div>
           )}
 
-          <div className="max-w-3xl mx-auto px-4 py-6">
+          <div className="max-w-3xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
             {state.messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
@@ -101,7 +101,7 @@ export default function ChatView() {
       )}
 
       {/* System prompt collapsible row */}
-      <div className="border-t border-border-light max-w-3xl w-full mx-auto px-4">
+      <div className="border-t border-border-light max-w-3xl w-full mx-auto px-2 sm:px-4">
         <button
           onClick={() => setSystemPromptExpanded((v) => !v)}
           className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary py-1.5 transition-colors cursor-pointer w-full text-left"
