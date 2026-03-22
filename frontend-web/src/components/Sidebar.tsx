@@ -11,6 +11,7 @@ export default function Sidebar() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filteredSessions = state.sessions.filter((s) => {
     if (!search.trim()) return true;
@@ -28,6 +29,19 @@ export default function Sidebar() {
     setEditValue(currentTitle ?? '');
     // Focus the input on the next paint
     setTimeout(() => editInputRef.current?.focus(), 0);
+  };
+
+  const handleDelete = async (sessionId: string) => {
+    setDeletingId(null);
+    try {
+      await api.deleteConversation(sessionId);
+      if (state.sessionId === sessionId) {
+        dispatch({ type: 'NEW_CHAT' });
+      }
+      await refreshSessions();
+    } catch {
+      // ignore errors
+    }
   };
 
   const commitEdit = async (sessionId: string) => {
@@ -171,6 +185,30 @@ export default function Sidebar() {
                         <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
+                    {deletingId === s.session_id ? (
+                      <span className="flex items-center gap-0.5 ml-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(s.session_id); }}
+                          className="shrink-0 w-[22px] h-[22px] flex items-center justify-center rounded text-danger hover:bg-button-hover transition-all cursor-pointer text-[11px] font-bold"
+                          title="Confirm delete"
+                        >✓</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}
+                          className="shrink-0 w-[22px] h-[22px] flex items-center justify-center rounded text-text-muted hover:bg-button-hover transition-all cursor-pointer text-[11px]"
+                          title="Cancel"
+                        >✕</button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeletingId(s.session_id); }}
+                        className="opacity-0 group-hover:opacity-100 ml-0.5 shrink-0 w-[22px] h-[22px] flex items-center justify-center rounded text-text-muted hover:text-danger hover:bg-button-hover transition-all cursor-pointer"
+                        title="Delete conversation"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 )}
               </li>

@@ -347,6 +347,15 @@ async def rename_conversation(
     return {"session_id": session_id, "title": title}
 
 
+@router.delete("/api/conversations/{session_id}", status_code=204)
+async def delete_conversation(
+    session_id: str,
+    api_key: str = Depends(verify_api_key),
+) -> None:
+    """Delete a conversation session and all its messages."""
+    await db.delete_session(session_id)
+
+
 @router.get("/api/conversations/{session_id}/export")
 async def export_conversation(
     session_id: str,
@@ -601,6 +610,9 @@ async def upload_file(
 
     upload_id = str(uuid.uuid4())
     bucket = session_id or "anonymous"
+    # Sanitize bucket (session_id) to prevent path traversal
+    if any(c in bucket for c in ("/", "\\", "..", ":")):
+        raise HTTPException(status_code=400, detail="Invalid session_id")
     upload_dir = pathlib.Path("./backend/storage/data/uploads") / bucket
     upload_dir.mkdir(parents=True, exist_ok=True)
 
@@ -627,20 +639,26 @@ async def upload_file(
         except Exception:
             pass  # PDF extraction is best-effort
 
-    # Save to DB
-    await db.save_upload(
-        upload_id=upload_id,
-        session_id=session_id,
-        original_filename=original_filename,
-        stored_path=str(stored_path),
-        file_size=len(content),
-        mime_type=mime_type,
-    )
+    # Save to DB — clean up file on failure to avoid orphaned files
+    try:
+        await db.save_upload(
+            upload_id=upload_id,
+            session_id=session_id,
+            original_filename=original_filename,
+            stored_path=str(stored_path),
+            file_size=len(content),
+            mime_type=mime_type,
+        )
+    except Exception:
+        try:
+            stored_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise HTTPException(status_code=500, detail="Failed to save upload metadata")
 
     return {
         "upload_id": upload_id,
         "filename": original_filename,
         "size": len(content),
-        "stored_path": str(stored_path),
         "session_id": session_id,
     }

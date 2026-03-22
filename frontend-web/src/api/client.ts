@@ -266,6 +266,17 @@ export function getConversation(sessionId: string, apiKey?: string) {
   return request<ConversationResponse>('GET', `/api/conversations/${sessionId}`, undefined, apiKey);
 }
 
+export async function deleteConversation(sessionId: string, apiKey?: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/conversations/${sessionId}`, {
+    method: 'DELETE',
+    headers: buildHeaders(apiKey),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`${res.status}: ${text}`);
+  }
+}
+
 export function renameConversation(sessionId: string, title: string, apiKey?: string) {
   return request<{ session_id: string; title: string }>(
     'PATCH',
