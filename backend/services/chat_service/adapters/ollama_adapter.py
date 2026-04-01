@@ -322,9 +322,7 @@ class OllamaAdapter(ChatService):
             "stream": stream,
         }
         if tools:
-            functions = [ts["function"] for ts in tools if "function" in ts]
-            if functions:
-                body["tools"] = functions
+            body["tools"] = tools
         body.update(kwargs)
         return body
 
@@ -332,8 +330,11 @@ class OllamaAdapter(ChatService):
     def _format_tool_calls(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         formatted = []
         for tc in tool_calls:
-            formatted.append({
-                "name": tc.get("function", {}).get("name", ""),
-                "arguments": tc.get("function", {}).get("arguments", {}),
-            })
+            # Ollama standard: {"function": {"name": "...", "arguments": {...}}}
+            # Some models: {"name": "...", "arguments": {...}}  (flat)
+            fn = tc.get("function", {})
+            name = fn.get("name") or tc.get("name", "")
+            arguments = fn.get("arguments") or tc.get("arguments", {})
+            if name:
+                formatted.append({"name": name, "arguments": arguments})
         return formatted

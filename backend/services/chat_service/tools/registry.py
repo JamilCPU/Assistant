@@ -3,7 +3,16 @@
 from typing import Dict, List, Optional, Any
 
 from backend.services.chat_service.tools.base import Tool
-from backend.services.chat_service.tools.filesystem import ListUploadsTool, ReadFileTool, SearchFilesTool
+from backend.services.chat_service.tools.filesystem import (
+    DeleteFileTool,
+    GetFileInfoTool,
+    ListDirectoryTool,
+    ListUploadsTool,
+    MoveFileTool,
+    ReadFileTool,
+    SearchFilesTool,
+    WriteFileTool,
+)
 from backend.services.chat_service.tools.web import FetchUrlTool, WebSearchTool
 from backend.services.chat_service.tools.system import LaunchAppTool
 
@@ -17,16 +26,33 @@ class ToolRegistry:
         self._register_default_tools()
     
     def _register_default_tools(self) -> None:
-        """Register default tools."""
-        # Filesystem tools
+        """Register default tools.
+
+        HOW TO ADD A NEW TOOL:
+          1. Create a class in the appropriate tools/*.py file that extends Tool.
+          2. Implement __init__ (name, description, schema, required_permissions)
+             and async execute(args) -> dict.
+          3. Import it here and call self.register(YourTool()) below.
+          That's it — the tool is automatically included in every chat request.
+        """
+        # Filesystem — read
         self.register(SearchFilesTool())
         self.register(ReadFileTool())
+        self.register(ListDirectoryTool())
+        self.register(GetFileInfoTool())
+
+        # Filesystem — write
+        self.register(WriteFileTool())
+        self.register(DeleteFileTool())
+        self.register(MoveFileTool())
+
+        # Uploads
         self.register(ListUploadsTool())
-        
+
         # Web tools
         self.register(WebSearchTool())
         self.register(FetchUrlTool())
-        
+
         # System tools
         self.register(LaunchAppTool())
     

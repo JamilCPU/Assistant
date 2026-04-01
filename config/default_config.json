@@ -6,11 +6,11 @@
   "models": {
     "chat": {
       "default": "llama3.1:8b",
-      "ollama_url": "http://localhost:11434"
+      "ollama_url": "http://host.docker.internal:11434"
     },
     "image": {
       "default": "stable-diffusion-xl",
-      "auto1111_url": "http://localhost:7860",
+      "auto1111_url": "http://stable-diffusion:7860",
       "save_path": "./backend/storage/data/images"
     },
     "tts": {
@@ -19,7 +19,9 @@
     }
   },
   "tools": {
-    "filesystem_allowlist": ["C:/Users", "D:/Documents"],
+    "filesystem_allowlist": [
+      "/host/users/jamil"
+    ],
     "max_file_size_mb": 10
   },
   "permissions": {
