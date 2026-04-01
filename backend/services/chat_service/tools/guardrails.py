@@ -139,7 +139,9 @@ class Guardrails:
         if mode == "remote":
             restricted = self.config.get("permissions.remote_mode", "restricted")
             if restricted == "restricted":
-                safe_tools = {"read_file", "search_files", "web_search", "list_uploads"}
+                # Write/mutate tools are disabled in remote mode for safety.
+                # To allow them remotely, set permissions.remote_mode to "full" in config.
+                safe_tools = {"read_file", "search_files", "list_directory", "get_file_info", "web_search", "list_uploads"}
                 if tool_name not in safe_tools:
                     raise ValueError(
                         f"Tool '{tool_name}' is not available in remote mode. "
@@ -154,6 +156,11 @@ class Guardrails:
             return True
         except ValueError:
             return False
+
+
+    def allowed_paths_hint(self) -> str:
+        """Return a comma-separated string of allowed base paths for use in tool descriptions."""
+        return ", ".join(self.allowlist) if self.allowlist else "(none configured)"
 
 
 # Global guardrails instance

@@ -10,11 +10,11 @@ services:
       - sqlite_data:/app/backend/storage/data
       # Mount config so you can edit settings without rebuilding
       - ./config:/app/config
+      # Mount host user directory so filesystem tools can read/write host files
+      - C:/Users/jamil:/host/users/jamil
     environment:
       - AUTO1111_URL=http://stable-diffusion:7860
       - OLLAMA_URL=http://host.docker.internal:11434
-    depends_on:
-      - stable-diffusion
     networks:
       - assistant_net
     restart: unless-stopped
@@ -32,6 +32,7 @@ services:
     restart: unless-stopped
 
   stable-diffusion:
+    profiles: ["sd"]
     image: universalml/automatic1111:latest
     ports:
       - "7860:7860"
