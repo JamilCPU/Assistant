@@ -20,7 +20,7 @@
   },
   "tools": {
     "filesystem_allowlist": [
-      "/host/users/jamil"
+      "/host/users/<user>"
     ],
     "max_file_size_mb": 10
   },

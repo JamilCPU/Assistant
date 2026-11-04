@@ -1,51 +1,75 @@
 # Local AI Assistant Platform
 
-A local-first AI dashboard that runs on a personal GPU workstation and exposes multiple AI capabilities through a unified interface.
+A local-first AI assistant that runs on a personal GPU workstation and puts several capabilities behind one web UI: chat with a local LLM (with tool calling), Stable Diffusion image generation (text-to-image and img2img), text-to-speech, personas, saved conversation history and an image gallery. A FastAPI gateway talks to the model services; a React front end talks to the gateway. Nothing is sent to a hosted AI API.
 
-## Features
+## Stack
 
-- **Chat Mode**: Conversation with local LLM (Ollama) with optional TTS output
-- **Image Generation**: Stable Diffusion via Automatic1111
-- **Modular Architecture**: Easy to add new models and tools
-- **Tool System**: Filesystem, web search, and system automation tools
-- **VPN Access**: Accessible via VPN mesh for remote devices
-- **Desktop UI**: PySide6 desktop app
+- Backend: Python, FastAPI, Uvicorn, httpx, Pydantic, SQLite (`aiosqlite`) with SQL migrations, SSE streaming
+- Model services (run separately): Ollama for chat, Automatic1111 for images, Piper for TTS
+- Front end: React 19, TypeScript, Vite, Tailwind CSS (`frontend-web/`)
+- Tests: Playwright specs in `tests/` (UI and API contracts)
+- Docker Compose for the backend, front end and an optional Automatic1111 container; optional WireGuard setup script for remote access
 
 ## Architecture
 
 ```
-PySide Desktop App → FastAPI Gateway → Model Services (Ollama/Auto1111/Piper)
+React web UI  ->  FastAPI gateway  ->  Ollama (chat, tools)
+                                   ->  Automatic1111 (images)
+                                   ->  Piper (TTS)
+                                   ->  SQLite (conversations, images, personas, settings)
 ```
 
-## Setup
+Chat tools live in `backend/services/chat_service/tools/` (filesystem, web, system) behind an allowlist/guardrail layer. The list of models the project was set up around is in [MODELS.md](MODELS.md).
 
-1. Install dependencies:
+## Running
+
+Prerequisites: Python 3.11+, Node.js, and the model services you want to use (Ollama on `localhost:11434`, Automatic1111 on `localhost:7860` started with `--api`, Piper for TTS).
+
 ```bash
-pip install -r requirements.txt
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt     # Windows: .venv\Scripts\pip
+.venv/bin/python -m backend.gateway.main      # API on http://localhost:8000
+
+cd frontend-web
+npm install
+npm run dev                                   # UI on http://localhost:5173
 ```
 
-2. Copy `.env.example` to `.env` and configure:
+On Windows, `scripts/start.ps1` starts the backend and the Vite dev server (`-Dev`, default) or builds the front end and serves it from the backend at `/ui` (`-Prod`).
+
+With Docker:
+
 ```bash
-cp .env.example .env
+docker compose up --build              # backend :8000, web UI :3000
+docker compose --profile sd up --build # also starts an Automatic1111 container (NVIDIA GPU)
 ```
 
-3. Ensure external services are running:
-   - Ollama (localhost:11434)
-   - Automatic1111 (localhost:7860)
-   - Piper TTS (configured path)
+The compose file mounts a host directory so the filesystem tools can reach it; edit the `volumes` entry and `tools.filesystem_allowlist` in `config/default_config.json` to match your own paths.
 
-4. Start the FastAPI server:
+### Configuration
+
+- `config/default_config.json` - server, model, tool and storage settings
+- `OLLAMA_URL`, `AUTO1111_URL` - override the service URLs from the config (used by the compose file)
+- `API_KEY` (or `server.api_key` in the config) - when set, API requests require the key and CORS is restricted to the configured origins
+
+## Tests
+
 ```bash
-python -m backend.gateway.main
+cd tests
+npm install
+npx playwright test
 ```
 
-5. Start the PySide desktop app:
-```bash
-python -m frontend.main
-```
+The specs need the backend and front end running; `live-integration.spec.ts` also needs the model services.
 
-## Project Structure
+## Project layout
 
-- `backend/` - FastAPI gateway, services, tools, storage
-- `frontend/` - PySide6 desktop application
-- `config/` - Configuration files
+- `backend/gateway/` - FastAPI app, routers, auth and request middleware
+- `backend/services/` - chat, image and TTS services with adapters
+- `backend/storage/` - config, database layer and SQL migrations
+- `frontend-web/` - React UI
+- `.plans/`, `.reports/`, `plans/` - design plans and audit notes written while building the project
+
+## Status
+
+Working personal project under active development. It is designed for a trusted machine or private network, not for exposure to the public internet.
