@@ -76,7 +76,7 @@ test('ollama responds to a basic message', async ({ page }) => {
 test('model uses write_file tool to create a file on the Desktop', async ({ page }) => {
   await startFreshChat(page);
 
-  const targetPath = '/host/users/jamil/Desktop/assistant_test.txt';
+  const targetPath = '/host/users/<user>/Desktop/assistant_test.txt';
   const prompt = `Use the write_file tool to create a file at "${targetPath}" with the content "Hello from the AI assistant! Filesystem tools are working."`;
 
   const reply = await sendAndWait(page, prompt, 120_000);
