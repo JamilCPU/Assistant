@@ -58,3 +58,15 @@ tests/plan.json
 # Claude Code internal
 .claude/worktrees/
 .claude/settings.local.json
+.env.*
+!.env.example
+*.keys
+*.sqlite
+*.sqlite3
+.venv/
+*.pyc
+bin/
+obj/
+.vs/
+*.class
+target/
