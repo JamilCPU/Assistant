@@ -11,7 +11,7 @@ services:
       # Mount config so you can edit settings without rebuilding
       - ./config:/app/config
       # Mount host user directory so filesystem tools can read/write host files
-      - C:/Users/jamil:/host/users/jamil
+      - ${HOST_HOME:-C:/Users/<user>}:/host/users/<user>
     environment:
       - AUTO1111_URL=http://stable-diffusion:7860
       - OLLAMA_URL=http://host.docker.internal:11434

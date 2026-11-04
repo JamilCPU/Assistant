@@ -8,7 +8,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-const BASE = '/host/users/jamil';
+const BASE = '/host/users/<user>';
 const DESKTOP = `${BASE}/Desktop`;
 const TEST_FILE = `${DESKTOP}/fs_tool_test.txt`;
 const MOVED_FILE = `${DESKTOP}/fs_tool_moved.txt`;
